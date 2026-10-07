@@ -1,0 +1,3 @@
+io.github.nebojsamitrovic.stethoscope.autoconfigure.StethoscopeAutoConfiguration
+io.github.nebojsamitrovic.stethoscope.autoconfigure.web.StethoscopeWebMvcAutoConfiguration
+io.github.nebojsamitrovic.stethoscope.autoconfigure.jdbc.StethoscopeJdbcAutoConfiguration

@@ -1,0 +1,70 @@
+// Zajednička podešavanja za sve module koji se objavljuju.
+
+subprojects {
+    group = rootProject.group
+    version = rootProject.version
+
+    repositories {
+        mavenCentral()
+    }
+
+    apply plugin: 'maven-publish'
+
+    plugins.withId('java-library') {
+        java {
+            withSourcesJar()
+            withJavadocJar()
+        }
+
+        tasks.withType(JavaCompile).configureEach {
+            options.release = 17
+            options.encoding = 'UTF-8'
+            options.compilerArgs += ['-parameters', '-Xlint:all,-processing,-serial']
+        }
+
+        tasks.withType(Javadoc).configureEach {
+            options.encoding = 'UTF-8'
+            options.addStringOption('Xdoclint:none', '-quiet')
+        }
+
+        tasks.withType(Test).configureEach {
+            useJUnitPlatform()
+        }
+
+        publishing {
+            publications {
+                mavenJava(MavenPublication) {
+                    from components.java
+                }
+            }
+        }
+    }
+
+    // POM metapodaci koje Maven Central zahteva.
+    afterEvaluate {
+        publishing.publications.withType(MavenPublication).configureEach {
+            pom {
+                name = project.name
+                description = project.description ?: 'Stethoscope: request-level debugging dashboard for Spring Boot'
+                url = 'https://github.com/nebojsamitrovic/spring-boot-stethoscope'
+                licenses {
+                    license {
+                        name = 'The Apache License, Version 2.0'
+                        url = 'https://www.apache.org/licenses/LICENSE-2.0.txt'
+                    }
+                }
+                developers {
+                    developer {
+                        id = 'nebojsamitrovic'
+                        name = 'Nebojsa Mitrovic'
+                    }
+                }
+                scm {
+                    url = 'https://github.com/nebojsamitrovic/spring-boot-stethoscope'
+                    connection = 'scm:git:https://github.com/nebojsamitrovic/spring-boot-stethoscope.git'
+                    developerConnection = 'scm:git:ssh://git@github.com/nebojsamitrovic/spring-boot-stethoscope.git'
+                }
+            }
+        }
+    }
+}

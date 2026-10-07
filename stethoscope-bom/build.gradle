@@ -1,0 +1,21 @@
+plugins {
+    id 'java-platform'
+}
+
+description = 'Stethoscope BOM: aligned versions for all Stethoscope modules'
+
+dependencies {
+    constraints {
+        api project(':stethoscope-core')
+        api project(':stethoscope-spring-boot-autoconfigure')
+        api project(':stethoscope-spring-boot-starter')
+    }
+}
+
+publishing {
+    publications {
+        mavenBom(MavenPublication) {
+            from components.javaPlatform
+        }
+    }
+}

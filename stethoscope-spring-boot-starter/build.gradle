@@ -1,0 +1,11 @@
+plugins {
+    id 'java-library'
+}
+
+description = 'Stethoscope starter: add this one dependency to your Spring Boot app'
+
+dependencies {
+    api project(':stethoscope-spring-boot-autoconfigure')
+    // SQL watcher. Bez ovoga Stethoscope radi, ali ne beleži upite.
+    api "net.ttddyy:datasource-proxy:${datasourceProxyVersion}"
+}

@@ -1,0 +1,30 @@
+plugins {
+    id 'java-library'
+}
+
+description = 'Stethoscope auto-configuration for Spring Boot'
+
+dependencies {
+    // Spring verzije dolaze iz BOM-a, ali ih ne nameće korisniku (compileOnly / optional).
+    compileOnly platform("org.springframework.boot:spring-boot-dependencies:${springBootVersion}")
+    annotationProcessor platform("org.springframework.boot:spring-boot-dependencies:${springBootVersion}")
+    testImplementation platform("org.springframework.boot:spring-boot-dependencies:${springBootVersion}")
+
+    api project(':stethoscope-core')
+
+    compileOnly 'org.springframework.boot:spring-boot-autoconfigure'
+    compileOnly 'org.springframework:spring-webmvc'
+    compileOnly 'jakarta.servlet:jakarta.servlet-api'
+    compileOnly 'org.slf4j:slf4j-api'
+    compileOnly "net.ttddyy:datasource-proxy:${datasourceProxyVersion}"
+
+    // Generiše spring-configuration-metadata.json → autocomplete u application.yml
+    annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
+
+    testImplementation 'org.springframework.boot:spring-boot-starter-web'
+    testImplementation 'org.springframework.boot:spring-boot-starter-jdbc'
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation "net.ttddyy:datasource-proxy:${datasourceProxyVersion}"
+    testRuntimeOnly 'com.h2database:h2'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}

@@ -1,0 +1,6 @@
+rootProject.name = 'stethoscope'
+
+include 'stethoscope-core'
+include 'stethoscope-spring-boot-autoconfigure'
+include 'stethoscope-spring-boot-starter'
+include 'stethoscope-bom'
