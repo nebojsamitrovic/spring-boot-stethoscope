@@ -58,6 +58,16 @@ public class StethoscopeProperties {
 
     private final Mail mail = new Mail();
 
+    private final Jobs jobs = new Jobs();
+
+    private final Models models = new Models();
+
+    private final Security security = new Security();
+
+    private final Messages messages = new Messages();
+
+    private final Redis redis = new Redis();
+
     public boolean isEnabled() {
         return enabled;
     }
@@ -152,6 +162,26 @@ public class StethoscopeProperties {
 
     public Mail getMail() {
         return mail;
+    }
+
+    public Jobs getJobs() {
+        return jobs;
+    }
+
+    public Models getModels() {
+        return models;
+    }
+
+    public Security getSecurity() {
+        return security;
+    }
+
+    public Messages getMessages() {
+        return messages;
+    }
+
+    public Redis getRedis() {
+        return redis;
     }
 
     public static class Requests {
@@ -454,6 +484,76 @@ public class StethoscopeProperties {
     public static class Mail {
 
         /** Record mail sent through JavaMailSender beans. */
+        private boolean enabled = true;
+
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(boolean enabled) {
+            this.enabled = enabled;
+        }
+    }
+
+    public static class Jobs {
+
+        /** Record work submitted to Spring TaskExecutor beans, e.g. @Async methods; linked to the request that dispatched it. */
+        private boolean enabled = true;
+
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(boolean enabled) {
+            this.enabled = enabled;
+        }
+    }
+
+    public static class Models {
+
+        /** Record JPA entity inserts, updates and deletes with changed attributes (Hibernate only). */
+        private boolean enabled = true;
+
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(boolean enabled) {
+            this.enabled = enabled;
+        }
+    }
+
+    public static class Security {
+
+        /** Record Spring Security authentication and authorization events. */
+        private boolean enabled = true;
+
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(boolean enabled) {
+            this.enabled = enabled;
+        }
+    }
+
+    public static class Messages {
+
+        /** Record Kafka and RabbitMQ messages sent and received via Spring's observation support. */
+        private boolean enabled = true;
+
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(boolean enabled) {
+            this.enabled = enabled;
+        }
+    }
+
+    public static class Redis {
+
+        /** Record Redis commands by wrapping every RedisConnectionFactory bean. */
         private boolean enabled = true;
 
         public boolean isEnabled() {

@@ -127,6 +127,37 @@ public record Entry(
         // dump (also LOCATION)
         public static final String VALUES = "values";
 
+        // job (also TASK, DURATION_MS, SUCCESS, ERROR, THREAD)
+        public static final String WAIT_MS = "waitMs";
+        public static final String EXECUTOR = "executor";
+        /** Batch that dispatched this unit of work, e.g. the request that called an {@code @Async} method. */
+        public static final String PARENT_BATCH = "parentBatch";
+
+        // model
+        public static final String ENTITY = "entity";
+        public static final String ENTITY_ID = "entityId";
+        public static final String ACTION = "action";
+        public static final String CHANGES = "changes";
+
+        // security (also RESULT, ERROR)
+        public static final String KIND = "kind";
+        public static final String PRINCIPAL = "principal";
+        public static final String RESULT = "result";
+        public static final String RESOURCE = "resource";
+        public static final String AUTHORITIES = "authorities";
+        public static final String DETAILS = "details";
+
+        // message (also KEY, PAYLOAD, DURATION_MS, SUCCESS, ERROR)
+        public static final String SYSTEM = "system";
+        public static final String DIRECTION = "direction";
+        public static final String DESTINATION = "destination";
+        public static final String LISTENER = "listener";
+        public static final String METADATA = "metadata";
+
+        // redis (also DURATION_MS, SUCCESS, ERROR)
+        public static final String COMMAND = "command";
+        public static final String ARGS = "args";
+
         private Content() {
         }
     }

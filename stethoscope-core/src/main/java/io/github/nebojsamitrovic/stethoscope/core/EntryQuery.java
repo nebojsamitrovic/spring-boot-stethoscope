@@ -49,6 +49,12 @@ public record EntryQuery(EntryType type, String tag, String search, int limit) {
             case CACHE -> entry.getString(Entry.Content.CACHE_NAME, "") + " " + entry.getString(Entry.Content.KEY, "");
             case MAIL -> entry.getString(Entry.Content.SUBJECT, "") + " " + entry.getString(Entry.Content.TO, "");
             case DUMP -> entry.getString(Entry.Content.VALUES, "");
+            case JOB -> entry.getString(Entry.Content.TASK, "");
+            case MODEL -> entry.getString(Entry.Content.ENTITY, "") + " " + entry.getString(Entry.Content.ENTITY_ID, "")
+                    + " " + entry.getString(Entry.Content.ACTION, "");
+            case SECURITY -> entry.getString(Entry.Content.PRINCIPAL, "") + " " + entry.getString(Entry.Content.RESOURCE, "");
+            case MESSAGE -> entry.getString(Entry.Content.DESTINATION, "") + " " + entry.getString(Entry.Content.LISTENER, "");
+            case REDIS -> entry.getString(Entry.Content.COMMAND, "") + " " + entry.getString(Entry.Content.ARGS, "");
         };
     }
 

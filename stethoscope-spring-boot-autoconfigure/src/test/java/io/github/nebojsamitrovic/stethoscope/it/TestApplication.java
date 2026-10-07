@@ -21,6 +21,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.JavaMailSenderImpl;
 import org.springframework.mail.javamail.MimeMessageHelper;
+import org.springframework.scheduling.annotation.Async;
+import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -38,6 +40,7 @@ import org.springframework.web.reactive.function.client.WebClient;
 @SpringBootApplication
 @EnableCaching
 @EnableScheduling
+@EnableAsync
 class TestApplication {
 
     private static final Logger log = LoggerFactory.getLogger(TestApplication.class);
@@ -64,6 +67,28 @@ class TestApplication {
     }
 
     record OrderPlaced(long orderId, String customer) {
+    }
+
+    @Bean
+    StubRedisConnectionFactory redisConnectionFactory() {
+        return new StubRedisConnectionFactory();
+    }
+
+    @Service
+    static class ReportService {
+
+        private final JdbcTemplate jdbc;
+
+        ReportService(JdbcTemplate jdbc) {
+            this.jdbc = jdbc;
+        }
+
+        @Async
+        public java.util.concurrent.CompletableFuture<Integer> countItems() {
+            Integer count = jdbc.queryForObject("select count(*) from item", Integer.class);
+            log.info("counted {} items in the background", count);
+            return java.util.concurrent.CompletableFuture.completedFuture(count);
+        }
     }
 
     @Service
@@ -107,10 +132,18 @@ class TestApplication {
         private final PriceService prices;
         private final ApplicationEventPublisher events;
         private final JavaMailSender mailSender;
+        private final ReportService reports;
+        private final CustomerRepository customers;
+        private final org.springframework.data.redis.core.StringRedisTemplate redis;
 
         ItemController(JdbcTemplate jdbc, RestClient.Builder restClient, WebClient.Builder webClient,
                 PriceService prices, ApplicationEventPublisher events, JavaMailSender mailSender,
+                ReportService reports, CustomerRepository customers,
+                org.springframework.data.redis.core.StringRedisTemplate redis,
                 @Value("${test.external-url:http://localhost:1}") String externalUrl) {
+            this.reports = reports;
+            this.customers = customers;
+            this.redis = redis;
             this.jdbc = jdbc;
             this.restClient = restClient.baseUrl(externalUrl).build();
             this.webClient = webClient.baseUrl(externalUrl).build();
@@ -197,6 +230,39 @@ class TestApplication {
         String dump() {
             Stethoscope.dump(Map.of("cart", List.of(1, 2, 3)));
             return "dumped";
+        }
+
+        @GetMapping("/async")
+        int async() {
+            return reports.countItems().join();
+        }
+
+        @PostMapping("/customers/lifecycle")
+        String customerLifecycle() {
+            Customer customer = customers.save(new Customer("ana", "s3cret"));
+            customer.setName("Ana");
+            customer = customers.save(customer);
+            customers.delete(customer);
+            return "done";
+        }
+
+        @GetMapping("/redis")
+        String redis() {
+            redis.opsForValue().set("greeting", "hello");
+            return redis.opsForValue().get("greeting");
+        }
+
+        @PostMapping("/security")
+        String security(jakarta.servlet.http.HttpServletRequest request) {
+            var user = org.springframework.security.authentication.UsernamePasswordAuthenticationToken.authenticated(
+                    "ana", null, List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_USER")));
+            events.publishEvent(new org.springframework.security.authorization.event.AuthorizationDeniedEvent<>(
+                    () -> user, request, (org.springframework.security.authorization.AuthorizationResult)
+                    new org.springframework.security.authorization.AuthorizationDecision(false)));
+            events.publishEvent(new org.springframework.security.authentication.event.AuthenticationFailureBadCredentialsEvent(
+                    org.springframework.security.authentication.UsernamePasswordAuthenticationToken.unauthenticated("mallory", "guess"),
+                    new org.springframework.security.authentication.BadCredentialsException("Bad credentials")));
+            return "published";
         }
 
         @ExceptionHandler(IllegalStateException.class)

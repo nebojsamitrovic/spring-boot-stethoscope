@@ -7,13 +7,18 @@ public enum EntryType {
 
     REQUEST("Requests", "requests"),
     QUERY("Queries", "queries"),
+    MODEL("Models", "models"),
     EXCEPTION("Exceptions", "exceptions"),
     LOG("Logs", "logs"),
-    HTTP_CLIENT("HTTP Client", "http-client"),
+    JOB("Jobs", "jobs"),
     SCHEDULED("Schedule", "schedule"),
+    MESSAGE("Messages", "messages"),
+    HTTP_CLIENT("HTTP Client", "http-client"),
     EVENT("Events", "events"),
     CACHE("Cache", "cache"),
+    REDIS("Redis", "redis"),
     MAIL("Mail", "mail"),
+    SECURITY("Security", "security"),
     DUMP("Dumps", "dumps");
 
     private final String label;

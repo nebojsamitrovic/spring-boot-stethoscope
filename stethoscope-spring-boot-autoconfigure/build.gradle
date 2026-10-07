@@ -24,6 +24,12 @@ dependencies {
     compileOnly 'jakarta.mail:jakarta.mail-api'
     compileOnly 'ch.qos.logback:logback-classic'
     compileOnly 'com.fasterxml.jackson.core:jackson-databind'
+    compileOnly 'org.hibernate.orm:hibernate-core'
+    compileOnly 'jakarta.persistence:jakarta.persistence-api'
+    compileOnly 'org.springframework.security:spring-security-core'
+    compileOnly 'org.springframework.data:spring-data-redis'
+    compileOnly 'org.springframework.kafka:spring-kafka'
+    compileOnly 'org.springframework.amqp:spring-rabbit'
 
     // Generiše spring-configuration-metadata.json → autocomplete u application.yml
     annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
@@ -35,6 +41,11 @@ dependencies {
     testImplementation 'org.springframework.boot:spring-boot-starter-mail'
     testImplementation 'org.springframework:spring-webflux'
     testImplementation 'io.projectreactor.netty:reactor-netty-http'
+    testImplementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+    testImplementation 'org.springframework.data:spring-data-redis'
+    testImplementation 'org.springframework.security:spring-security-core'
+    testImplementation 'org.springframework.kafka:spring-kafka'
+    testImplementation 'org.springframework.amqp:spring-rabbit'
     testRuntimeOnly 'com.h2database:h2'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }

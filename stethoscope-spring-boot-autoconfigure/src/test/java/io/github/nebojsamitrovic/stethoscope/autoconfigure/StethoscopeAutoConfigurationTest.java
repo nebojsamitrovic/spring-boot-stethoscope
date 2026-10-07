@@ -9,6 +9,12 @@ import io.github.nebojsamitrovic.stethoscope.autoconfigure.events.StethoscopeEve
 import io.github.nebojsamitrovic.stethoscope.autoconfigure.http.StethoscopeClientHttpRequestInterceptor;
 import io.github.nebojsamitrovic.stethoscope.autoconfigure.http.StethoscopeHttpClientAutoConfiguration;
 import io.github.nebojsamitrovic.stethoscope.autoconfigure.jdbc.DataSourceWrappingPostProcessor;
+import io.github.nebojsamitrovic.stethoscope.autoconfigure.jobs.StethoscopeJobsAutoConfiguration;
+import io.github.nebojsamitrovic.stethoscope.autoconfigure.messaging.StethoscopeMessagingAutoConfiguration;
+import io.github.nebojsamitrovic.stethoscope.autoconfigure.models.StethoscopeModelsAutoConfiguration;
+import io.github.nebojsamitrovic.stethoscope.autoconfigure.redis.StethoscopeRedisAutoConfiguration;
+import io.github.nebojsamitrovic.stethoscope.autoconfigure.security.StethoscopeSecurityAutoConfiguration;
+import io.github.nebojsamitrovic.stethoscope.autoconfigure.security.StethoscopeSecurityListener;
 import io.github.nebojsamitrovic.stethoscope.autoconfigure.logging.StethoscopeLoggingAutoConfiguration;
 import io.github.nebojsamitrovic.stethoscope.autoconfigure.mail.StethoscopeMailAutoConfiguration;
 import io.github.nebojsamitrovic.stethoscope.autoconfigure.scheduling.StethoscopeSchedulingAutoConfiguration;
@@ -33,6 +39,13 @@ import org.springframework.cache.CacheManager;
 import org.springframework.cache.concurrent.ConcurrentMapCacheManager;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.JavaMailSenderImpl;
+import io.micrometer.observation.ObservationRegistry;
+import java.util.Map;
+import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
+import org.springframework.kafka.core.DefaultKafkaProducerFactory;
+import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -49,7 +62,12 @@ class StethoscopeAutoConfigurationTest {
                     StethoscopeEventsAutoConfiguration.class,
                     StethoscopeCacheAutoConfiguration.class,
                     StethoscopeMailAutoConfiguration.class,
-                    StethoscopeDumpAutoConfiguration.class));
+                    StethoscopeDumpAutoConfiguration.class,
+                    StethoscopeJobsAutoConfiguration.class,
+                    StethoscopeModelsAutoConfiguration.class,
+                    StethoscopeSecurityAutoConfiguration.class,
+                    StethoscopeRedisAutoConfiguration.class,
+                    StethoscopeMessagingAutoConfiguration.class));
 
     private final ApplicationContextRunner jdbcRunner = new ApplicationContextRunner()
             .withConfiguration(AutoConfigurations.of(
@@ -70,6 +88,11 @@ class StethoscopeAutoConfigurationTest {
             assertThat(context).doesNotHaveBean(StethoscopeCacheAutoConfiguration.CacheManagerWrappingPostProcessor.class);
             assertThat(context).doesNotHaveBean(StethoscopeMailAutoConfiguration.MailSenderWrappingPostProcessor.class);
             assertThat(context).doesNotHaveBean(StethoscopeDumpAutoConfiguration.DumpInstaller.class);
+            assertThat(context).doesNotHaveBean(StethoscopeJobsAutoConfiguration.TaskExecutorWrappingPostProcessor.class);
+            assertThat(context).doesNotHaveBean(StethoscopeSecurityListener.class);
+            assertThat(context).doesNotHaveBean(StethoscopeRedisAutoConfiguration.RedisConnectionFactoryWrappingPostProcessor.class);
+            assertThat(context).doesNotHaveBean(StethoscopeMessagingAutoConfiguration.ObservationRegistryPostProcessor.class);
+            assertThat(context).doesNotHaveBean(ObservationRegistry.class);
         });
     }
 
@@ -100,6 +123,10 @@ class StethoscopeAutoConfigurationTest {
             assertThat(context).hasSingleBean(StethoscopeCacheAutoConfiguration.CacheManagerWrappingPostProcessor.class);
             assertThat(context).hasSingleBean(StethoscopeMailAutoConfiguration.MailSenderWrappingPostProcessor.class);
             assertThat(context).hasSingleBean(StethoscopeDumpAutoConfiguration.DumpInstaller.class);
+            assertThat(context).hasSingleBean(StethoscopeJobsAutoConfiguration.TaskExecutorWrappingPostProcessor.class);
+            assertThat(context).hasSingleBean(StethoscopeSecurityListener.class);
+            assertThat(context).hasSingleBean(StethoscopeRedisAutoConfiguration.RedisConnectionFactoryWrappingPostProcessor.class);
+            assertThat(context).hasSingleBean(StethoscopeMessagingAutoConfiguration.ObservationRegistryPostProcessor.class);
         });
     }
 
@@ -107,7 +134,9 @@ class StethoscopeAutoConfigurationTest {
     void eachWatcherCanBeSwitchedOff() {
         webRunner.withPropertyValues("stethoscope.enabled=true", "stethoscope.logs.enabled=false",
                         "stethoscope.http-client.enabled=false", "stethoscope.scheduled.enabled=false",
-                        "stethoscope.events.enabled=false", "stethoscope.cache.enabled=false", "stethoscope.mail.enabled=false")
+                        "stethoscope.events.enabled=false", "stethoscope.cache.enabled=false", "stethoscope.mail.enabled=false",
+                        "stethoscope.jobs.enabled=false", "stethoscope.models.enabled=false", "stethoscope.security.enabled=false",
+                        "stethoscope.redis.enabled=false", "stethoscope.messages.enabled=false")
                 .run(context -> {
                     assertThat(context).hasSingleBean(Recorder.class);
                     assertThat(context).doesNotHaveBean(StethoscopeLoggingAutoConfiguration.LogbackRegistration.class);
@@ -116,7 +145,44 @@ class StethoscopeAutoConfigurationTest {
                     assertThat(context).doesNotHaveBean(StethoscopeEventListener.class);
                     assertThat(context).doesNotHaveBean(StethoscopeCacheAutoConfiguration.CacheManagerWrappingPostProcessor.class);
                     assertThat(context).doesNotHaveBean(StethoscopeMailAutoConfiguration.MailSenderWrappingPostProcessor.class);
+                    assertThat(context).doesNotHaveBean(StethoscopeJobsAutoConfiguration.TaskExecutorWrappingPostProcessor.class);
+                    assertThat(context).doesNotHaveBean(StethoscopeModelsAutoConfiguration.HibernateListenerRegistration.class);
+                    assertThat(context).doesNotHaveBean(StethoscopeSecurityListener.class);
+                    assertThat(context).doesNotHaveBean(StethoscopeRedisAutoConfiguration.RedisConnectionFactoryWrappingPostProcessor.class);
+                    assertThat(context).doesNotHaveBean(StethoscopeMessagingAutoConfiguration.ObservationRegistryPostProcessor.class);
+                    assertThat(context).doesNotHaveBean(ObservationRegistry.class);
                 });
+    }
+
+    @Test
+    void taskExecutorsAreWrappedButSchedulersAreNot() {
+        webRunner.withPropertyValues("stethoscope.enabled=true")
+                .withBean(ThreadPoolTaskExecutor.class, ThreadPoolTaskExecutor::new)
+                .withBean(ThreadPoolTaskScheduler.class, ThreadPoolTaskScheduler::new)
+                .run(context -> {
+                    assertThat(TypePreservingProxy.isWrapped(context.getBean(ThreadPoolTaskExecutor.class))).isTrue();
+                    assertThat(TypePreservingProxy.isWrapped(context.getBean(ThreadPoolTaskScheduler.class))).isFalse();
+                });
+    }
+
+    @Test
+    void kafkaObservationIsSwitchedOnWithAFallbackRegistry() {
+        webRunner.withPropertyValues("stethoscope.enabled=true")
+                .withBean(ConcurrentKafkaListenerContainerFactory.class, ConcurrentKafkaListenerContainerFactory::new)
+                .withBean(KafkaTemplate.class, () -> new KafkaTemplate<>(new DefaultKafkaProducerFactory<>(Map.of())))
+                .run(context -> {
+                    assertThat(context).hasSingleBean(ObservationRegistry.class);
+                    assertThat(context.getBean(ConcurrentKafkaListenerContainerFactory.class).getContainerProperties()
+                            .isObservationEnabled()).isTrue();
+                });
+    }
+
+    @Test
+    void anExistingObservationRegistryIsKept() {
+        ObservationRegistry registry = ObservationRegistry.create();
+        webRunner.withPropertyValues("stethoscope.enabled=true")
+                .withBean(ObservationRegistry.class, () -> registry)
+                .run(context -> assertThat(context.getBean(ObservationRegistry.class)).isSameAs(registry));
     }
 
     @Test

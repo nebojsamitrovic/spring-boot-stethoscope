@@ -276,14 +276,14 @@ tr.empty td { text-align: center; color: var(--muted); padding: 48px 16px; }
 .facts {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 1px;
   margin: 0 0 24px;
-  background: var(--border);
+  background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   overflow: hidden;
 }
-.facts > div { background: var(--surface); padding: 10px 14px; min-width: 0; }
+/* hairlines between cells; an unfilled last row stays plain instead of showing the grid background */
+.facts > div { padding: 10px 14px; min-width: 0; box-shadow: 1px 0 0 var(--border), 0 1px 0 var(--border); }
 .facts dt { font-size: 11.5px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 600; }
 .facts dd { margin: 2px 0 0; overflow-wrap: anywhere; }
 .facts dd a { color: var(--accent); }

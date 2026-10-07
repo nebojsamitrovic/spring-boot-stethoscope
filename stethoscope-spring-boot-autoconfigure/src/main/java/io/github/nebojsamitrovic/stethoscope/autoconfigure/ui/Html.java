@@ -35,12 +35,18 @@ final class Html {
         return oneLine.length() <= max ? oneLine : oneLine.substring(0, max - 1) + "…";
     }
 
-    /** {@code com.acme.OrderService} → {@code OrderService}. */
+    /** {@code com.acme.OrderService} → {@code OrderService}; {@code Outer$Inner} → {@code Inner}. */
     static String simpleClassName(String className) {
         if (className == null) {
             return "";
         }
         int dot = className.lastIndexOf('.');
-        return dot < 0 ? className : className.substring(dot + 1);
+        String simple = dot < 0 ? className : className.substring(dot + 1);
+        int dollar = simple.lastIndexOf('$');
+        // keep anonymous classes recognisable: Outer$1 stays as is
+        if (dollar >= 0 && dollar < simple.length() - 1 && !Character.isDigit(simple.charAt(dollar + 1))) {
+            return simple.substring(dollar + 1);
+        }
+        return simple;
     }
 }

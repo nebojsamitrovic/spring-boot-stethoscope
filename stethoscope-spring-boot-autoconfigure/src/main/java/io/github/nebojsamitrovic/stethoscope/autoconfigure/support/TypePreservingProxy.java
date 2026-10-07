@@ -27,25 +27,34 @@ public final class TypePreservingProxy {
      *         subclassed (e.g. it is final)
      */
     public static <T> Object wrap(T target, Class<T> api, T wrapper) {
+        Object proxy = intercept(target, invocation -> {
+            Method apiMethod = find(api, invocation.getMethod());
+            if (apiMethod == null) {
+                return invocation.proceed();
+            }
+            try {
+                return apiMethod.invoke(wrapper, invocation.getArguments());
+            } catch (InvocationTargetException ex) {
+                throw ex.getTargetException();
+            }
+        });
+        return proxy != null ? proxy : wrapper;
+    }
+
+    /**
+     * Class-based proxy of {@code target} with one interceptor around every method.
+     *
+     * @return the proxy, or {@code null} if the class cannot be subclassed
+     */
+    public static Object intercept(Object target, MethodInterceptor interceptor) {
         try {
             ProxyFactory factory = new ProxyFactory(target);
             factory.setProxyTargetClass(true);
             factory.addInterface(Wrapped.class);
-            factory.addAdvice((MethodInterceptor) invocation -> {
-                Method method = invocation.getMethod();
-                Method apiMethod = find(api, method);
-                if (apiMethod == null) {
-                    return invocation.proceed();
-                }
-                try {
-                    return apiMethod.invoke(wrapper, invocation.getArguments());
-                } catch (InvocationTargetException ex) {
-                    throw ex.getTargetException();
-                }
-            });
+            factory.addAdvice(interceptor);
             return factory.getProxy(target.getClass().getClassLoader());
         } catch (RuntimeException | LinkageError ex) {
-            return wrapper;
+            return null;
         }
     }
 

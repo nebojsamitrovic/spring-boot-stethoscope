@@ -1,9 +1,10 @@
 # Stethoscope
 
 Debugging dashboard for Spring Boot, inspired by Laravel Telescope.
-See every HTTP request with the SQL it ran (with N+1 detection), the exceptions it threw, its logs,
-outgoing HTTP calls, cache hits, events and mail — plus scheduled task runs and your own dumps — in
-your browser at `/stethoscope`.
+See every HTTP request with the SQL it ran (with N+1 detection), the entities it changed, the
+exceptions it threw, its logs, background jobs, outgoing HTTP calls, Redis commands, cache hits,
+events, messages, mail and security decisions — plus scheduled task runs, Kafka/RabbitMQ listeners
+and your own dumps — in your browser at `/stethoscope`.
 
 - **One dependency**, zero UI build: server-rendered HTML + bundled htmx (~15 KB gzip), no CDN.
 - **Off by default.** You turn it on in your dev profile.
@@ -43,12 +44,24 @@ Open `http://localhost:8080/stethoscope`.
 | Cache       | Wraps every `CacheManager` bean                              | Hit, miss, put, evict, clear                             |
 | Mail        | Wraps every `JavaMailSender` bean                            | Recipients, subject, bodies, attachments, HTML preview   |
 | Dumps       | `Stethoscope.dump(value)`                                    | Pretty JSON via Jackson when available                   |
+| Jobs        | Wraps every `TaskExecutor` bean                              | `@Async` methods by name; own batch, linked to the request that dispatched them |
+| Models      | Hibernate post-insert/update/delete listeners                | Changed attributes (`old → new`); secrets masked; lazy associations never loaded |
+| Security    | Spring Security application events                           | Logins, failed logins, logouts, denied (and published granted) authorizations |
+| Messages    | spring-kafka / spring-rabbit observations                    | Sent and received; each listener invocation is its own batch |
+| Redis       | Wraps every `RedisConnectionFactory` bean                    | Command, arguments, duration                             |
 
-Everything recorded during one request (or one scheduled run) is linked: the request page lists its
-queries, exceptions, logs, HTTP calls, cache operations, events, mail and dumps.
+Everything recorded during one unit of work — a request, a scheduled run, a job or a received
+message — is linked: its page lists the queries, model changes, exceptions, logs, HTTP calls, Redis
+commands, cache operations, events, messages, mail and dumps it caused, and a request page also lists
+the `@Async` jobs it dispatched.
 
-Wrapped beans (`CacheManager`, `JavaMailSender`) are class-based proxies, so injecting the concrete
-type (`CaffeineCacheManager`, `JavaMailSenderImpl`) keeps working.
+Wrapped beans (`CacheManager`, `JavaMailSender`, `TaskExecutor`, `RedisConnectionFactory`) are
+class-based proxies, so injecting the concrete type (`CaffeineCacheManager`, `JavaMailSenderImpl`,
+`ThreadPoolTaskExecutor`, `LettuceConnectionFactory`) keeps working.
+
+Kafka and RabbitMQ are recorded through Spring's observation support, which Stethoscope switches on
+for Spring Boot's listener container factories and templates. Without Spring Boot Actuator there is
+no `ObservationRegistry`, so Stethoscope provides one when Kafka or RabbitMQ is on the classpath.
 
 ### Dumps
 
@@ -76,7 +89,7 @@ stethoscope:
     ignore-paths: ["/actuator/**", "/**/*.css", ...]
     record-request-body: true
     record-response-body: false  # buffers responses; keep off for streaming/SSE
-    max-body-size: 65536        
+    max-body-size: 65536
     slow-threshold: 1s
   queries:
     enabled: true
@@ -94,7 +107,7 @@ stethoscope:
   http-client:
     enabled: true
     record-bodies: true          # read-ahead of at most max-body-size, never buffers whole responses
-    max-body-size: 65536        
+    max-body-size: 65536
     slow-threshold: 1s
   scheduled:
     enabled: true
@@ -104,6 +117,16 @@ stethoscope:
   cache:
     enabled: true
   mail:
+    enabled: true
+  jobs:
+    enabled: true
+  models:
+    enabled: true
+  security:
+    enabled: true
+  messages:
+    enabled: true
+  redis:
     enabled: true
 ```
 
@@ -136,7 +159,9 @@ http.authorizeHttpRequests(a -> a.requestMatchers("/stethoscope/**").permitAll()
 ## Known limitations
 
 - Servlet stack only (no WebFlux server yet; `WebClient` calls are recorded).
-- Work on other threads (`@Async`, executors) is recorded but not linked to the request.
+- Jobs are recorded for Spring `TaskExecutor` beans only; plain `ExecutorService`s and
+  `CompletableFuture.supplyAsync(...)` without an executor are not linked to the request.
+- Kafka batch listeners are not observed by spring-kafka, so they are not recorded.
 - Logs are recorded with Logback only (Spring Boot's default).
 - After wrapping, the `DataSource` bean is a `ProxyDataSource`. Inject `DataSource`, not
   `HikariDataSource`, or set `stethoscope.queries.enabled=false`.

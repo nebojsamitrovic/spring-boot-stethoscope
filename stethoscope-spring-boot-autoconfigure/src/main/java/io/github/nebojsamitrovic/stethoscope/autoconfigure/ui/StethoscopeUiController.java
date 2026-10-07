@@ -96,8 +96,25 @@ public class StethoscopeUiController {
     public ResponseEntity<String> detail(@PathVariable("id") long id, HttpServletRequest request) {
         ViewContext ctx = context(request);
         return store.find(id)
-                .map(entry -> html(Views.detail(ctx, entry, store.batch(entry.batchId()))))
+                .map(entry -> html(Views.detail(ctx, entry, store.batch(entry.batchId()),
+                        childJobs(entry.batchId()), parentBatch(entry))))
                 .orElseGet(() -> notFound(ctx));
+    }
+
+    /** Jobs dispatched from a batch, e.g. {@code @Async} calls made while handling a request. */
+    private List<Entry> childJobs(String batchId) {
+        if (batchId == null) {
+            return List.of();
+        }
+        return store.list(new EntryQuery(EntryType.JOB, null, null, Integer.MAX_VALUE)).stream()
+                .filter(job -> batchId.equals(job.getString(Entry.Content.PARENT_BATCH, null)))
+                .sorted(java.util.Comparator.comparingLong(Entry::id))
+                .toList();
+    }
+
+    private List<Entry> parentBatch(Entry entry) {
+        String parent = entry.getString(Entry.Content.PARENT_BATCH, null);
+        return parent == null ? List.of() : store.batch(parent);
     }
 
     @PostMapping("/clear")

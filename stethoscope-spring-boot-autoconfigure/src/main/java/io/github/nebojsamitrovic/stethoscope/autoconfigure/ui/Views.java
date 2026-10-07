@@ -157,6 +157,11 @@ final class Views {
                 case CACHE -> cacheRow(ctx, entry);
                 case MAIL -> mailRow(ctx, entry);
                 case DUMP -> dumpRow(ctx, entry);
+                case JOB -> jobRow(ctx, entry);
+                case MODEL -> modelRow(ctx, entry);
+                case SECURITY -> securityRow(ctx, entry);
+                case MESSAGE -> messageRow(ctx, entry);
+                case REDIS -> redisRow(ctx, entry);
             });
         }
         return out.toString();
@@ -280,25 +285,95 @@ final class Views {
                + "</tr>\n";
     }
 
+    private static String jobRow(ViewContext ctx, Entry e) {
+        return "<tr>"
+               + "<td class=\"main\">" + entryLink(ctx, e, "code")
+               + esc(shortTask(e.getString(Entry.Content.TASK, ""))) + "</a>"
+               + (e.hasTag(Entry.Tags.N_PLUS_ONE) ? " <span class=\"badge amber\">N+1</span>" : "") + "</td>"
+               + "<td>" + successBadge(e) + "</td>"
+               + "<td class=\"num muted\">" + e.getLong(Entry.Content.WAIT_MS, 0) + " ms</td>"
+               + durationCell(e)
+               + "<td class=\"num\">" + e.getLong(Entry.Content.QUERY_COUNT, 0) + "</td>"
+               + whenCell(ctx, e)
+               + "</tr>\n";
+    }
+
+    private static String modelRow(ViewContext ctx, Entry e) {
+        Map<String, String> changes = e.get(Entry.Content.CHANGES);
+        return "<tr>"
+               + "<td>" + actionBadge(e.getString(Entry.Content.ACTION, "")) + "</td>"
+               + "<td class=\"main\">" + entryLink(ctx, e, "code")
+               + esc(simpleClassName(e.getString(Entry.Content.ENTITY, ""))) + "<span class=\"muted\">#"
+               + esc(e.getString(Entry.Content.ENTITY_ID, "")) + "</span></a>"
+               + (changes == null || changes.isEmpty() ? ""
+                       : " <span class=\"muted small\">" + esc(truncate(String.join(", ", changes.keySet()), 100)) + "</span>")
+               + "</td>"
+               + whenCell(ctx, e)
+               + "</tr>\n";
+    }
+
+    private static String securityRow(ViewContext ctx, Entry e) {
+        return "<tr>"
+               + "<td>" + resultBadge(e.getString(Entry.Content.RESULT, "")) + "</td>"
+               + "<td class=\"main\">" + entryLink(ctx, e, "")
+               + "<strong>" + esc(e.getString(Entry.Content.PRINCIPAL, "")) + "</strong> <span class=\"muted code\">"
+               + esc(truncate(e.getString(Entry.Content.RESOURCE, e.getString(Entry.Content.KIND, "")), 140)) + "</span></a></td>"
+               + whenCell(ctx, e)
+               + "</tr>\n";
+    }
+
+    private static String messageRow(ViewContext ctx, Entry e) {
+        return "<tr>"
+               + "<td>" + directionBadge(e) + "</td>"
+               + "<td class=\"main\">" + entryLink(ctx, e, "code")
+               + esc(e.getString(Entry.Content.DESTINATION, "")) + "</a> <span class=\"muted small\">"
+               + esc(e.getString(Entry.Content.SYSTEM, "")) + "</span></td>"
+               + "<td>" + successBadge(e) + "</td>"
+               + durationCell(e)
+               + whenCell(ctx, e)
+               + "</tr>\n";
+    }
+
+    private static String redisRow(ViewContext ctx, Entry e) {
+        return "<tr>"
+               + "<td class=\"main\">" + entryLink(ctx, e, "code")
+               + "<strong>" + esc(e.getString(Entry.Content.COMMAND, "")) + "</strong> "
+               + esc(truncate(e.getString(Entry.Content.ARGS, ""), 160)) + "</a>"
+               + (e.hasTag(Entry.Tags.FAILED) ? " <span class=\"badge red\">failed</span>" : "") + "</td>"
+               + durationCell(e)
+               + whenCell(ctx, e)
+               + "</tr>\n";
+    }
+
     // ---------------------------------------------------------------- detail pages
 
-    static String detail(ViewContext ctx, Entry entry, List<Entry> batch) {
+    /**
+     * @param batch    entries of the entry's own batch
+     * @param children jobs dispatched from that batch
+     * @param parent   entries of the batch that dispatched this entry (jobs only), otherwise empty
+     */
+    static String detail(ViewContext ctx, Entry entry, List<Entry> batch, List<Entry> children, List<Entry> parent) {
         String body = switch (entry.type()) {
-            case REQUEST -> requestDetail(ctx, entry, batch);
+            case REQUEST -> requestDetail(ctx, entry, batch, children);
             case QUERY -> queryDetail(ctx, entry, batch);
             case EXCEPTION -> exceptionDetail(ctx, entry, batch);
             case LOG -> logDetail(ctx, entry, batch);
             case HTTP_CLIENT -> httpClientDetail(ctx, entry, batch);
-            case SCHEDULED -> scheduledDetail(ctx, entry, batch);
+            case SCHEDULED -> scheduledDetail(ctx, entry, batch, children);
             case EVENT -> eventDetail(ctx, entry, batch);
             case CACHE -> cacheDetail(ctx, entry, batch);
             case MAIL -> mailDetail(ctx, entry, batch);
             case DUMP -> dumpDetail(ctx, entry, batch);
+            case JOB -> jobDetail(ctx, entry, batch, children, parent);
+            case MODEL -> modelDetail(ctx, entry, batch);
+            case SECURITY -> securityDetail(ctx, entry, batch);
+            case MESSAGE -> messageDetail(ctx, entry, batch, children);
+            case REDIS -> redisDetail(ctx, entry, batch);
         };
         return page(ctx, entry.type(), title(entry), body);
     }
 
-    private static String requestDetail(ViewContext ctx, Entry e, List<Entry> batch) {
+    private static String requestDetail(ViewContext ctx, Entry e, List<Entry> batch, List<Entry> children) {
         int status = (int) e.getLong(Entry.Content.STATUS, 0);
         String query = e.getString(Entry.Content.QUERY_STRING, null);
 
@@ -317,7 +392,7 @@ final class Views {
                 "Queries", e.getLong(Entry.Content.QUERY_COUNT, 0) + " · " + e.getLong(Entry.Content.QUERY_TIME_MS, 0) + " ms"));
 
         out.append(duplicateQueries(e));
-        out.append(related(ctx, e, batch));
+        out.append(related(ctx, e, batch, children));
 
         out.append(keyValueSection("Request headers", e.get(Entry.Content.REQUEST_HEADERS)));
         out.append(bodySection("Request body", e.getString(Entry.Content.REQUEST_BODY, null)));
@@ -412,7 +487,7 @@ final class Views {
         return out.toString();
     }
 
-    private static String scheduledDetail(ViewContext ctx, Entry e, List<Entry> batch) {
+    private static String scheduledDetail(ViewContext ctx, Entry e, List<Entry> batch, List<Entry> children) {
         StringBuilder out = new StringBuilder();
         out.append(backLink(ctx, EntryType.SCHEDULED));
         out.append("<div class=\"detail-head\"><h1 class=\"code\">").append(esc(shortTask(e.getString(Entry.Content.TASK, ""))))
@@ -425,7 +500,102 @@ final class Views {
                 "Queries", e.getLong(Entry.Content.QUERY_COUNT, 0) + " · " + e.getLong(Entry.Content.QUERY_TIME_MS, 0) + " ms"));
         out.append(errorCallout(e));
         out.append(duplicateQueries(e));
-        out.append(related(ctx, e, batch));
+        out.append(related(ctx, e, batch, children));
+        return out.toString();
+    }
+
+    private static String jobDetail(ViewContext ctx, Entry e, List<Entry> batch, List<Entry> children, List<Entry> parent) {
+        StringBuilder out = new StringBuilder();
+        out.append(backLink(ctx, EntryType.JOB));
+        out.append("<div class=\"detail-head\"><h1 class=\"code\">").append(esc(shortTask(e.getString(Entry.Content.TASK, ""))))
+                .append("</h1>").append(successBadge(e)).append("</div>");
+        out.append(facts(
+                "Time", esc(DATE_TIME.format(e.createdAt().atZone(ctx.zone()))),
+                "Task", "<span class=\"code\">" + esc(e.getString(Entry.Content.TASK, "")) + "</span>",
+                "Executor", esc(e.getString(Entry.Content.EXECUTOR, "—")),
+                "Thread", esc(e.getString(Entry.Content.THREAD, "—")),
+                "Waited", e.getLong(Entry.Content.WAIT_MS, 0) + " ms",
+                "Duration", e.getLong(Entry.Content.DURATION_MS, 0) + " ms",
+                "Queries", e.getLong(Entry.Content.QUERY_COUNT, 0) + " · " + e.getLong(Entry.Content.QUERY_TIME_MS, 0) + " ms",
+                "Dispatched by", originLink(ctx, parent)));
+        out.append(errorCallout(e));
+        out.append(duplicateQueries(e));
+        out.append(related(ctx, e, batch, children));
+        return out.toString();
+    }
+
+    private static String modelDetail(ViewContext ctx, Entry e, List<Entry> batch) {
+        StringBuilder out = new StringBuilder();
+        out.append(backLink(ctx, EntryType.MODEL));
+        out.append("<div class=\"detail-head\">").append(actionBadge(e.getString(Entry.Content.ACTION, "")))
+                .append("<h1 class=\"code\">").append(esc(simpleClassName(e.getString(Entry.Content.ENTITY, ""))))
+                .append("<span class=\"muted\">#").append(esc(e.getString(Entry.Content.ENTITY_ID, ""))).append("</span></h1></div>");
+        out.append(facts(
+                "Time", esc(DATE_TIME.format(e.createdAt().atZone(ctx.zone()))),
+                "Entity", "<span class=\"code\">" + esc(e.getString(Entry.Content.ENTITY, "")) + "</span>",
+                "Id", esc(e.getString(Entry.Content.ENTITY_ID, "")),
+                originLabel(batch), originLink(ctx, batch)));
+        String title = "updated".equals(e.getString(Entry.Content.ACTION, "")) ? "Changes" : "Attributes";
+        out.append(keyValueSection(title, e.get(Entry.Content.CHANGES)));
+        return out.toString();
+    }
+
+    private static String securityDetail(ViewContext ctx, Entry e, List<Entry> batch) {
+        StringBuilder out = new StringBuilder();
+        out.append(backLink(ctx, EntryType.SECURITY));
+        out.append("<div class=\"detail-head\">").append(resultBadge(e.getString(Entry.Content.RESULT, "")))
+                .append("<h1>").append(esc(e.getString(Entry.Content.PRINCIPAL, ""))).append("</h1></div>");
+        out.append(facts(
+                "Time", esc(DATE_TIME.format(e.createdAt().atZone(ctx.zone()))),
+                "Kind", esc(e.getString(Entry.Content.KIND, "")),
+                "Resource", "<span class=\"code\">" + esc(e.getString(Entry.Content.RESOURCE, "—")) + "</span>",
+                "Authorities", esc(joined(e.get(Entry.Content.AUTHORITIES))),
+                originLabel(batch), originLink(ctx, batch)));
+        out.append(errorCallout(e));
+        out.append(bodySection("Decision", e.getString(Entry.Content.DETAILS, null)));
+        return out.toString();
+    }
+
+    private static String messageDetail(ViewContext ctx, Entry e, List<Entry> batch, List<Entry> children) {
+        boolean received = "received".equals(e.getString(Entry.Content.DIRECTION, ""));
+        StringBuilder out = new StringBuilder();
+        out.append(backLink(ctx, EntryType.MESSAGE));
+        out.append("<div class=\"detail-head\">").append(directionBadge(e))
+                .append("<h1 class=\"code\">").append(esc(e.getString(Entry.Content.DESTINATION, ""))).append("</h1>")
+                .append(successBadge(e)).append("</div>");
+        List<String> pairs = new ArrayList<>(List.of(
+                "Time", esc(DATE_TIME.format(e.createdAt().atZone(ctx.zone()))),
+                "System", esc(e.getString(Entry.Content.SYSTEM, "")),
+                "Key", "<span class=\"code\">" + esc(e.getString(Entry.Content.KEY, "—")) + "</span>",
+                "Duration", e.getLong(Entry.Content.DURATION_MS, 0) + " ms"));
+        if (received) {
+            pairs.addAll(List.of("Listener", esc(e.getString(Entry.Content.LISTENER, "—")),
+                    "Queries", e.getLong(Entry.Content.QUERY_COUNT, 0) + " · " + e.getLong(Entry.Content.QUERY_TIME_MS, 0) + " ms"));
+        } else {
+            pairs.addAll(List.of(originLabel(batch), originLink(ctx, batch)));
+        }
+        out.append(facts(pairs.toArray(String[]::new)));
+        out.append(errorCallout(e));
+        out.append(bodySection("Payload", e.getString(Entry.Content.PAYLOAD, null)));
+        out.append(keyValueSection("Metadata", e.get(Entry.Content.METADATA)));
+        if (received) {
+            out.append(duplicateQueries(e));
+            out.append(related(ctx, e, batch, children));
+        }
+        return out.toString();
+    }
+
+    private static String redisDetail(ViewContext ctx, Entry e, List<Entry> batch) {
+        StringBuilder out = new StringBuilder();
+        out.append(backLink(ctx, EntryType.REDIS));
+        out.append("<div class=\"detail-head\"><h1 class=\"code\">").append(esc(e.getString(Entry.Content.COMMAND, "")))
+                .append("</h1>").append(e.hasTag(Entry.Tags.FAILED) ? "<span class=\"badge red\">failed</span>" : "").append("</div>");
+        out.append(facts(
+                "Time", esc(DATE_TIME.format(e.createdAt().atZone(ctx.zone()))),
+                "Duration", e.getLong(Entry.Content.DURATION_MS, 0) + " ms",
+                originLabel(batch), originLink(ctx, batch)));
+        out.append(errorCallout(e));
+        out.append(bodySection("Arguments", e.getString(Entry.Content.ARGS, null)));
         return out.toString();
     }
 
@@ -525,13 +695,15 @@ final class Views {
     // ---------------------------------------------------------------- pieces
 
     /** Everything else recorded in the same batch, grouped by type, as Telescope shows under a request. */
-    private static String related(ViewContext ctx, Entry self, List<Entry> batch) {
+    private static String related(ViewContext ctx, Entry self, List<Entry> batch, List<Entry> children) {
         StringBuilder out = new StringBuilder();
         for (EntryType type : EntryType.values()) {
             if (type == EntryType.REQUEST || type == EntryType.SCHEDULED) {
                 continue;
             }
-            List<Entry> ofType = batch.stream().filter(b -> b.type() == type && b.id() != self.id()).toList();
+            List<Entry> ofType = type == EntryType.JOB
+                    ? children
+                    : batch.stream().filter(b -> b.type() == type && b.id() != self.id() && !isOrigin(b)).toList();
             if (ofType.isEmpty() && type != EntryType.QUERY) {
                 continue;
             }
@@ -574,11 +746,19 @@ final class Views {
             case MAIL -> esc(e.getString(Entry.Content.SUBJECT, "(no subject)")) + " <span class=\"muted\">→ "
                          + esc(truncate(joined(e.get(Entry.Content.TO)), 80)) + "</span>";
             case DUMP -> esc(truncate(joined(e.get(Entry.Content.VALUES)), 180));
+            case JOB -> esc(shortTask(e.getString(Entry.Content.TASK, ""))) + " " + successBadge(e);
+            case MODEL -> actionBadge(e.getString(Entry.Content.ACTION, "")) + " " + esc(simpleClassName(e.getString(Entry.Content.ENTITY, "")))
+                          + "<span class=\"muted\">#" + esc(e.getString(Entry.Content.ENTITY_ID, "")) + "</span>";
+            case SECURITY -> resultBadge(e.getString(Entry.Content.RESULT, "")) + " " + esc(e.getString(Entry.Content.PRINCIPAL, ""))
+                             + " <span class=\"muted\">" + esc(truncate(e.getString(Entry.Content.RESOURCE, ""), 120)) + "</span>";
+            case MESSAGE -> directionBadge(e) + " " + esc(e.getString(Entry.Content.DESTINATION, ""))
+                            + " <span class=\"muted\">" + esc(e.getString(Entry.Content.SYSTEM, "")) + "</span>";
+            case REDIS -> "<strong>" + esc(e.getString(Entry.Content.COMMAND, "")) + "</strong> " + esc(truncate(e.getString(Entry.Content.ARGS, ""), 160));
         };
     }
 
     private static boolean summaryIsCode(EntryType type) {
-        return type == EntryType.QUERY || type == EntryType.DUMP;
+        return type == EntryType.QUERY || type == EntryType.DUMP || type == EntryType.REDIS;
     }
 
     private static String duplicateQueries(Entry e) {
@@ -608,20 +788,36 @@ final class Views {
                + esc(ctx.link("/entries/" + e.id())) + "\">";
     }
 
-    /** The request or scheduled run an entry belongs to. */
+    /** Entries that open a batch: a request, a scheduled run, a job or a received message. */
+    private static boolean isOrigin(Entry e) {
+        return switch (e.type()) {
+            case REQUEST, SCHEDULED, JOB -> true;
+            case MESSAGE -> "received".equals(e.getString(Entry.Content.DIRECTION, ""));
+            default -> false;
+        };
+    }
+
+    /** The unit of work an entry belongs to. */
     private static Optional<Entry> origin(List<Entry> batch) {
-        return batch.stream().filter(b -> b.type() == EntryType.REQUEST || b.type() == EntryType.SCHEDULED).findFirst();
+        return batch.stream().filter(Views::isOrigin).findFirst();
     }
 
     private static String originLabel(List<Entry> batch) {
-        return origin(batch).map(o -> o.type() == EntryType.SCHEDULED ? "Scheduled run" : "Request").orElse("Request");
+        return origin(batch).map(o -> switch (o.type()) {
+            case SCHEDULED -> "Scheduled run";
+            case JOB -> "Job";
+            case MESSAGE -> "Message";
+            default -> "Request";
+        }).orElse("Request");
     }
 
     private static String originLink(ViewContext ctx, List<Entry> batch) {
         return origin(batch).map(o -> "<a href=\"" + esc(ctx.link("/entries/" + o.id())) + "\">"
-                                      + (o.type() == EntryType.SCHEDULED
-                                              ? esc(shortTask(o.getString(Entry.Content.TASK, "")))
-                                              : esc(o.getString(Entry.Content.METHOD, "")) + " " + esc(o.getString(Entry.Content.URI, "")))
+                                      + switch (o.type()) {
+                                          case SCHEDULED, JOB -> esc(shortTask(o.getString(Entry.Content.TASK, "")));
+                                          case MESSAGE -> esc(o.getString(Entry.Content.DESTINATION, ""));
+                                          default -> esc(o.getString(Entry.Content.METHOD, "")) + " " + esc(o.getString(Entry.Content.URI, ""));
+                                      }
                                       + "</a>")
                 .orElse("—");
     }
@@ -689,6 +885,30 @@ final class Views {
             default -> "";
         };
         return "<span class=\"level" + tone + "\">" + esc(level) + "</span>";
+    }
+
+    private static String actionBadge(String action) {
+        String tone = switch (action) {
+            case "created" -> " green";
+            case "updated" -> " blue";
+            case "deleted" -> " red";
+            default -> "";
+        };
+        return "<span class=\"level" + tone + "\">" + esc(action) + "</span>";
+    }
+
+    private static String resultBadge(String result) {
+        String tone = switch (result) {
+            case "granted", "authenticated" -> " green";
+            case "denied", "failed" -> " red";
+            default -> "";
+        };
+        return "<span class=\"level" + tone + "\">" + esc(result) + "</span>";
+    }
+
+    private static String directionBadge(Entry e) {
+        String direction = e.getString(Entry.Content.DIRECTION, "");
+        return "<span class=\"level" + ("received".equals(direction) ? " blue" : " green") + "\">" + esc(direction) + "</span>";
     }
 
     private static String cacheBadge(String operation) {
@@ -774,6 +994,11 @@ final class Views {
             case CACHE -> "Cache " + e.getString(Entry.Content.OPERATION, "");
             case MAIL -> e.getString(Entry.Content.SUBJECT, "Mail");
             case DUMP -> "Dump #" + e.id();
+            case JOB -> shortTask(e.getString(Entry.Content.TASK, "Job"));
+            case MODEL -> simpleClassName(e.getString(Entry.Content.ENTITY, "")) + "#" + e.getString(Entry.Content.ENTITY_ID, "");
+            case SECURITY -> e.getString(Entry.Content.RESULT, "") + " " + e.getString(Entry.Content.PRINCIPAL, "");
+            case MESSAGE -> e.getString(Entry.Content.DESTINATION, "Message");
+            case REDIS -> e.getString(Entry.Content.COMMAND, "Redis");
         };
     }
 
@@ -790,15 +1015,21 @@ final class Views {
             case CACHE -> "<th>Operation</th><th>Key</th><th>Cache</th><th>When</th>";
             case MAIL -> "<th>Subject</th><th>To</th><th>When</th>";
             case DUMP -> "<th>Value</th><th>Location</th><th>When</th>";
+            case JOB -> "<th>Job</th><th>Status</th><th class=\"num\">Waited</th><th class=\"num\">Duration</th>"
+                        + "<th class=\"num\">Queries</th><th>When</th>";
+            case MODEL -> "<th>Action</th><th>Model</th><th>When</th>";
+            case SECURITY -> "<th>Result</th><th>Principal</th><th>When</th>";
+            case MESSAGE -> "<th>Direction</th><th>Destination</th><th>Status</th><th class=\"num\">Duration</th><th>When</th>";
+            case REDIS -> "<th>Command</th><th class=\"num\">Duration</th><th>When</th>";
         };
     }
 
     private static int columnCount(EntryType type) {
         return switch (type) {
-            case REQUEST -> 6;
-            case HTTP_CLIENT, SCHEDULED -> 5;
+            case REQUEST, JOB -> 6;
+            case HTTP_CLIENT, SCHEDULED, MESSAGE -> 5;
             case EXCEPTION, LOG, CACHE -> 4;
-            case QUERY, MAIL, DUMP -> 3;
+            case QUERY, MAIL, DUMP, MODEL, SECURITY, REDIS -> 3;
             case EVENT -> 2;
         };
     }
@@ -811,6 +1042,11 @@ final class Views {
             case DUMP -> "Nothing dumped yet. Call Stethoscope.dump(value) anywhere in your code.";
             case MAIL -> "No mail sent yet. Mail sent through a JavaMailSender bean shows up here.";
             case CACHE -> "No cache activity yet. Operations on Spring's CacheManager (e.g. @Cacheable) show up here.";
+            case JOB -> "No jobs yet. @Async methods and tasks submitted to Spring TaskExecutor beans show up here.";
+            case MODEL -> "No model changes yet. JPA entity inserts, updates and deletes (Hibernate) show up here.";
+            case SECURITY -> "No security events yet. Logins, failed logins and denied access (Spring Security) show up here.";
+            case MESSAGE -> "No messages yet. Kafka and RabbitMQ messages sent and received through Spring show up here.";
+            case REDIS -> "No Redis commands yet. Commands sent through Spring Data Redis show up here.";
             default -> "Nothing here yet. Use your app and entries will appear as they happen.";
         };
     }
@@ -827,6 +1063,11 @@ final class Views {
             case CACHE -> "Filter by cache or key…";
             case MAIL -> "Filter by subject or recipient…";
             case DUMP -> "Filter by value…";
+            case JOB -> "Filter by job…";
+            case MODEL -> "Filter by model or id…";
+            case SECURITY -> "Filter by principal or resource…";
+            case MESSAGE -> "Filter by topic, queue or listener…";
+            case REDIS -> "Filter by command or key…";
         };
     }
 
@@ -845,6 +1086,15 @@ final class Views {
                     {Entry.Tags.FAILED, "Failed"}, {Entry.Tags.N_PLUS_ONE, "N+1 queries"}, {Entry.Tags.HAS_EXCEPTION, "With exception"}};
             case CACHE -> new String[][] {{"hit", "Hits"}, {"miss", "Misses"}, {"put", "Puts"}, {"evict", "Evictions"}, {"clear", "Clears"}};
             case MAIL -> new String[][] {{Entry.Tags.FAILED, "Failed"}};
+            case JOB -> new String[][] {
+                    {Entry.Tags.FAILED, "Failed"}, {Entry.Tags.N_PLUS_ONE, "N+1 queries"}, {Entry.Tags.HAS_EXCEPTION, "With exception"}};
+            case MODEL -> new String[][] {{"created", "Created"}, {"updated", "Updated"}, {"deleted", "Deleted"}};
+            case SECURITY -> new String[][] {
+                    {"denied", "Denied"}, {"granted", "Granted"}, {"failed", "Failed logins"}, {"authenticated", "Logins"},
+                    {"logout", "Logouts"}};
+            case MESSAGE -> new String[][] {
+                    {"received", "Received"}, {"sent", "Sent"}, {Entry.Tags.FAILED, "Failed"}, {"kafka", "Kafka"}, {"rabbitmq", "RabbitMQ"}};
+            case REDIS -> new String[][] {{Entry.Tags.FAILED, "Failed"}};
             case EVENT, DUMP -> new String[0][];
         };
     }

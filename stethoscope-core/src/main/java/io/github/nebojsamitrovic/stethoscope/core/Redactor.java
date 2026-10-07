@@ -55,6 +55,11 @@ public final class Redactor {
         return name != null && headers.contains(name.toLowerCase(Locale.ROOT));
     }
 
+    /** Whether a parameter, form field or entity attribute with this name holds a secret. */
+    public boolean isSensitiveParameter(String name) {
+        return name != null && parameters.contains(name.toLowerCase(Locale.ROOT));
+    }
+
     /** Copy of the headers with sensitive values masked. Keeps insertion order. */
     public Map<String, String> headers(Map<String, String> source) {
         Map<String, String> result = new LinkedHashMap<>();
