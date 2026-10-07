@@ -106,7 +106,7 @@ class MoreWatchersIntegrationTest {
         assertThat(denied.<List<String>>get(Entry.Content.AUTHORITIES)).containsExactly("ROLE_USER");
         Entry failed = security.get(1);
         assertThat(failed.getString(Entry.Content.RESULT, "")).isEqualTo("failed");
-        assertThat(failed.getString(Entry.Content.PRINCIPAL, "")).isEqualTo("mallory");
+        assertThat(failed.getString(Entry.Content.PRINCIPAL, "")).isEqualTo("test");
         assertThat(failed.getString(Entry.Content.ERROR, "")).contains("Bad credentials");
         // Spring Security events are not duplicated under "Events"
         assertThat(ofType(store.batch(failed.batchId()), EntryType.EVENT)).isEmpty();

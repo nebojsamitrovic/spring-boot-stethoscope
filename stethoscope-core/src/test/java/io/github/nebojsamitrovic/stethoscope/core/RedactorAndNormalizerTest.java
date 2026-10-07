@@ -13,7 +13,7 @@ class RedactorAndNormalizerTest {
     @Test
     void masksSensitiveHeaders() {
         Map<String, String> headers = new LinkedHashMap<>();
-        headers.put("Authorization", "Bearer abc");
+        headers.put("Authorization", "Bearer test");
         headers.put("Accept", "application/json");
 
         assertEquals(Map.of("Authorization", Redactor.MASK, "Accept", "application/json"), redactor.headers(headers));
@@ -21,14 +21,14 @@ class RedactorAndNormalizerTest {
 
     @Test
     void masksQueryStringAndFormBody() {
-        assertEquals("user=ana&password=" + Redactor.MASK + "&x=1", redactor.queryString("user=ana&password=s3cr3t&x=1"));
-        assertEquals("token=" + Redactor.MASK, redactor.body("token=abc"));
+        assertEquals("user=test&password=" + Redactor.MASK + "&x=1", redactor.queryString("user=test&password=test&x=1"));
+        assertEquals("token=" + Redactor.MASK, redactor.body("token=test"));
         assertEquals("passwordHint=cat", redactor.queryString("passwordHint=cat"));
     }
 
     @Test
     void masksJsonFields() {
-        String json = "{\"email\":\"a@b.c\",\"password\" : \"p\\\"w\",\"nested\":{\"token\":123}}";
+        String json = "{\"email\":\"a@b.c\",\"password\" : \"te\\\"st\",\"nested\":{\"token\":123}}";
         assertEquals(
                 "{\"email\":\"a@b.c\",\"password\" : \"" + Redactor.MASK + "\",\"nested\":{\"token\":\"" + Redactor.MASK + "\"}}",
                 redactor.body(json));

@@ -96,16 +96,16 @@ class StethoscopeIntegrationTest {
     @Test
     void secretsAreRedacted() throws Exception {
         mvc.perform(post("/login")
-                        .header("Authorization", "Bearer top-secret")
+                        .header("Authorization", "Bearer test")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"username\":\"ana\",\"password\":\"hunter2\"}"))
+                        .content("{\"username\":\"test\",\"password\":\"test\"}"))
                 .andExpect(status().isOk());
 
         Entry request = onlyRequest("/login");
         Map<String, String> headers = request.get(Entry.Content.REQUEST_HEADERS);
         assertThat(headers).containsEntry("Authorization", Redactor.MASK);
         String body = request.get(Entry.Content.REQUEST_BODY);
-        assertThat(body).contains("ana").doesNotContain("hunter2");
+        assertThat(body).contains("\"username\":\"test\"").contains("\"password\":\"" + Redactor.MASK + "\"");
     }
 
     @Test

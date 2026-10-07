@@ -37,7 +37,7 @@ class MessagingObservationHandlerTest {
     @Test
     void kafkaListenerInvocationIsItsOwnBatch() {
         ConsumerRecord<String, String> record =
-                new ConsumerRecord<>("orders", 2, 41L, "order-7", "{\"id\":7,\"password\":\"x\"}");
+                new ConsumerRecord<>("orders", 2, 41L, "order-7", "{\"id\":7,\"password\":\"test\"}");
         KafkaRecordReceiverContext context = new KafkaRecordReceiverContext(record, "orderListener", () -> "cluster-1");
         assertThat(handler.supportsContext(context)).isTrue();
 
@@ -53,7 +53,7 @@ class MessagingObservationHandlerTest {
         assertThat(message.getString(Entry.Content.DESTINATION, "")).isEqualTo("orders");
         assertThat(message.getString(Entry.Content.KEY, "")).isEqualTo("order-7");
         assertThat(message.getString(Entry.Content.LISTENER, "")).isEqualTo("orderListener");
-        assertThat(message.getString(Entry.Content.PAYLOAD, "")).contains("\"id\":7").doesNotContain("\"x\"");
+        assertThat(message.getString(Entry.Content.PAYLOAD, "")).contains("\"id\":7").contains("\"password\":\"" + Redactor.MASK + "\"");
         assertThat(message.<Map<String, String>>get(Entry.Content.METADATA)).containsEntry("partition", "2").containsEntry("offset", "41");
         assertThat(message.<Boolean>get(Entry.Content.SUCCESS)).isFalse();
         assertThat(message.<Integer>get(Entry.Content.QUERY_COUNT)).isEqualTo(1);

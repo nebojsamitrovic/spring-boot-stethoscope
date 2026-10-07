@@ -190,8 +190,8 @@ class TestApplication {
 
         @GetMapping("/external")
         String external() {
-            return restClient.post().uri("/echo?api_key=secret-key")
-                    .header("Authorization", "Bearer abc")
+            return restClient.post().uri("/echo?api_key=test")
+                    .header("Authorization", "Bearer test")
                     .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
                     .body("{\"hello\":\"world\"}")
                     .retrieve().body(String.class);
@@ -239,7 +239,7 @@ class TestApplication {
 
         @PostMapping("/customers/lifecycle")
         String customerLifecycle() {
-            Customer customer = customers.save(new Customer("ana", "s3cret"));
+            Customer customer = customers.save(new Customer("ana", "test"));
             customer.setName("Ana");
             customer = customers.save(customer);
             customers.delete(customer);
@@ -260,7 +260,7 @@ class TestApplication {
                     () -> user, request, (org.springframework.security.authorization.AuthorizationResult)
                     new org.springframework.security.authorization.AuthorizationDecision(false)));
             events.publishEvent(new org.springframework.security.authentication.event.AuthenticationFailureBadCredentialsEvent(
-                    org.springframework.security.authentication.UsernamePasswordAuthenticationToken.unauthenticated("mallory", "guess"),
+                    org.springframework.security.authentication.UsernamePasswordAuthenticationToken.unauthenticated("test", "test"),
                     new org.springframework.security.authentication.BadCredentialsException("Bad credentials")));
             return "published";
         }
