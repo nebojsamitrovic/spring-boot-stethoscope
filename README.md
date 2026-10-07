@@ -12,23 +12,66 @@ and your own dumps — in your browser at `/stethoscope`.
 
 ## Install
 
+Requirements: Java 17+, Spring Boot 3.x with Spring MVC (servlet stack).
+
+### 1. Publish to your local Maven repository
+
+Stethoscope is not on Maven Central yet. In this repository run:
+
+```bash
+./gradlew publishToMavenLocal
+```
+
+Repeat this after every change to the library.
+
+### 2. Add the dependency to your app
+
+Gradle:
+
 ```groovy
+repositories {
+    mavenLocal()
+    mavenCentral()
+}
+
 dependencies {
-    implementation platform('io.github.nebojsamitrovic:stethoscope-bom:0.1.0-SNAPSHOT')
-    implementation 'io.github.nebojsamitrovic:stethoscope-spring-boot-starter'
+    implementation 'io.github.nebojsamitrovic:stethoscope-spring-boot-starter:0.1.0-SNAPSHOT'
 }
 ```
 
-Until it is on Maven Central: run `./gradlew publishToMavenLocal` here and add `mavenLocal()` to the
-app's repositories.
+Maven (reads `~/.m2` on its own, no extra repository needed):
+
+```xml
+<dependency>
+    <groupId>io.github.nebojsamitrovic</groupId>
+    <artifactId>stethoscope-spring-boot-starter</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+</dependency>
+```
+
+With several Stethoscope modules, the BOM keeps their versions aligned:
+`implementation platform('io.github.nebojsamitrovic:stethoscope-bom:0.1.0-SNAPSHOT')`.
+
+### 3. Turn it on in your dev profile
+
+It is off by default. In `src/main/resources/application-dev.yml`:
 
 ```yaml
-# application-dev.yml
 stethoscope:
   enabled: true
 ```
 
-Open `http://localhost:8080/stethoscope`.
+Run the app with that profile:
+
+```bash
+./gradlew bootRun --args='--spring.profiles.active=dev'
+# or: ./mvnw spring-boot:run -Dspring-boot.run.profiles=dev
+```
+
+Open `http://localhost:8080/stethoscope`. With Spring Security, see [Access control](#access-control).
+
+Do not enable it in production: it keeps requests, SQL, payloads and mail in memory. If it is enabled
+with a `prod`, `production` or `live` profile, the app logs a loud warning at startup.
 
 ## What it records
 
