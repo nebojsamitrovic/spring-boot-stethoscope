@@ -30,15 +30,10 @@ record ViewContext(
     }
 
     static String section(EntryType type) {
-        return type.label().toLowerCase(java.util.Locale.ROOT);
+        return type.section();
     }
 
     static EntryType fromSection(String section) {
-        for (EntryType type : EntryType.values()) {
-            if (section(type).equalsIgnoreCase(section)) {
-                return type;
-            }
-        }
-        return null;
+        return EntryType.fromSection(section);
     }
 }

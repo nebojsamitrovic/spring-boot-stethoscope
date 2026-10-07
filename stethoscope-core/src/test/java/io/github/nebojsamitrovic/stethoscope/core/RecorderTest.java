@@ -86,4 +86,14 @@ class RecorderTest {
         noParams.recordQuery("select * from users where email = ?", List.of("a@b.c"), 0, true, null);
         assertFalse(store.list(EntryQuery.of(EntryType.QUERY)).get(0).content().containsKey(Entry.Content.PARAMETERS));
     }
+
+    @Test
+    void sameExceptionIsRecordedOnceEvenWhenWrapped() {
+        IllegalStateException cause = new IllegalStateException("boom");
+        recorder.recordException(cause, true);
+        recorder.recordException(new RuntimeException("wrapper", cause), false);
+        recorder.recordException(cause, false);
+
+        assertEquals(1, store.count(EntryType.EXCEPTION));
+    }
 }

@@ -27,6 +27,20 @@ class InMemoryEntryStoreTest {
     }
 
     @Test
+    void capacityIsPerType() {
+        InMemoryEntryStore store = new InMemoryEntryStore(2);
+        store.store(entry(1, EntryType.REQUEST, "b", Map.of()));
+        for (long id = 2; id <= 10; id++) {
+            store.store(entry(id, EntryType.LOG, "b", Map.of()));
+        }
+
+        assertTrue(store.find(1).isPresent());
+        assertEquals(2, store.count(EntryType.LOG));
+        assertEquals(List.of(10L, 9L, 1L), ids(store.list(new EntryQuery(null, null, null, 10))));
+        assertEquals(List.of(1L, 9L, 10L), ids(store.batch("b")));
+    }
+
+    @Test
     void filtersByTypeTagAndSearch() {
         InMemoryEntryStore store = new InMemoryEntryStore(10);
         store.store(new Entry(1, "a", EntryType.REQUEST, Instant.now(),

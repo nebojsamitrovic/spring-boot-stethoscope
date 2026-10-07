@@ -42,6 +42,13 @@ public record EntryQuery(EntryType type, String tag, String search, int limit) {
             case QUERY -> entry.getString(Entry.Content.SQL, "");
             case EXCEPTION -> entry.getString(Entry.Content.EXCEPTION_CLASS, "") + " "
                     + entry.getString(Entry.Content.MESSAGE, "");
+            case LOG -> entry.getString(Entry.Content.LOGGER, "") + " " + entry.getString(Entry.Content.MESSAGE, "");
+            case HTTP_CLIENT -> entry.getString(Entry.Content.METHOD, "") + " " + entry.getString(Entry.Content.URL, "");
+            case SCHEDULED -> entry.getString(Entry.Content.TASK, "");
+            case EVENT -> entry.getString(Entry.Content.EVENT_CLASS, "") + " " + entry.getString(Entry.Content.PAYLOAD, "");
+            case CACHE -> entry.getString(Entry.Content.CACHE_NAME, "") + " " + entry.getString(Entry.Content.KEY, "");
+            case MAIL -> entry.getString(Entry.Content.SUBJECT, "") + " " + entry.getString(Entry.Content.TO, "");
+            case DUMP -> entry.getString(Entry.Content.VALUES, "");
         };
     }
 

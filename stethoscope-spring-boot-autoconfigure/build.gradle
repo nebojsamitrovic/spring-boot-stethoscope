@@ -18,6 +18,13 @@ dependencies {
     compileOnly 'org.slf4j:slf4j-api'
     compileOnly "net.ttddyy:datasource-proxy:${datasourceProxyVersion}"
 
+    // Optional integrations: each watcher is @ConditionalOnClass on these.
+    compileOnly 'org.springframework:spring-webflux'
+    compileOnly 'org.springframework:spring-context-support'
+    compileOnly 'jakarta.mail:jakarta.mail-api'
+    compileOnly 'ch.qos.logback:logback-classic'
+    compileOnly 'com.fasterxml.jackson.core:jackson-databind'
+
     // Generiše spring-configuration-metadata.json → autocomplete u application.yml
     annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
 
@@ -25,6 +32,9 @@ dependencies {
     testImplementation 'org.springframework.boot:spring-boot-starter-jdbc'
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation "net.ttddyy:datasource-proxy:${datasourceProxyVersion}"
+    testImplementation 'org.springframework.boot:spring-boot-starter-mail'
+    testImplementation 'org.springframework:spring-webflux'
+    testImplementation 'io.projectreactor.netty:reactor-netty-http'
     testRuntimeOnly 'com.h2database:h2'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }

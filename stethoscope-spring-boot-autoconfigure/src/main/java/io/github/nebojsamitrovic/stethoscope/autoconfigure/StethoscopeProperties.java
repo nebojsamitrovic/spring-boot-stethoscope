@@ -25,7 +25,7 @@ public class StethoscopeProperties {
     /** Where the dashboard is served, relative to the servlet context path. */
     private String path = "/stethoscope";
 
-    /** Maximum number of entries kept in memory; the oldest are dropped first. */
+    /** Maximum number of entries kept in memory per entry type; the oldest are dropped first. */
     private int maxEntries = 1000;
 
     /**
@@ -45,6 +45,18 @@ public class StethoscopeProperties {
     private final Queries queries = new Queries();
 
     private final Exceptions exceptions = new Exceptions();
+
+    private final Logs logs = new Logs();
+
+    private final HttpClient httpClient = new HttpClient();
+
+    private final Scheduled scheduled = new Scheduled();
+
+    private final Events events = new Events();
+
+    private final Cache cache = new Cache();
+
+    private final Mail mail = new Mail();
 
     public boolean isEnabled() {
         return enabled;
@@ -116,6 +128,30 @@ public class StethoscopeProperties {
 
     public Exceptions getExceptions() {
         return exceptions;
+    }
+
+    public Logs getLogs() {
+        return logs;
+    }
+
+    public HttpClient getHttpClient() {
+        return httpClient;
+    }
+
+    public Scheduled getScheduled() {
+        return scheduled;
+    }
+
+    public Events getEvents() {
+        return events;
+    }
+
+    public Cache getCache() {
+        return cache;
+    }
+
+    public Mail getMail() {
+        return mail;
     }
 
     public static class Requests {
@@ -261,6 +297,171 @@ public class StethoscopeProperties {
 
         public void setMaxStackTraceFrames(int maxStackTraceFrames) {
             this.maxStackTraceFrames = maxStackTraceFrames;
+        }
+    }
+
+    public static class Logs {
+
+        /** Record log events (Logback only). */
+        private boolean enabled = true;
+
+        /** Lowest level that is recorded. */
+        private String level = "INFO";
+
+        /** Logger name prefixes that are never recorded. */
+        private List<String> ignoreLoggers = new ArrayList<>();
+
+        /** Also record exceptions attached to ERROR log events under "Exceptions". */
+        private boolean recordExceptions = true;
+
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(boolean enabled) {
+            this.enabled = enabled;
+        }
+
+        public String getLevel() {
+            return level;
+        }
+
+        public void setLevel(String level) {
+            this.level = level;
+        }
+
+        public List<String> getIgnoreLoggers() {
+            return ignoreLoggers;
+        }
+
+        public void setIgnoreLoggers(List<String> ignoreLoggers) {
+            this.ignoreLoggers = ignoreLoggers;
+        }
+
+        public boolean isRecordExceptions() {
+            return recordExceptions;
+        }
+
+        public void setRecordExceptions(boolean recordExceptions) {
+            this.recordExceptions = recordExceptions;
+        }
+    }
+
+    public static class HttpClient {
+
+        /**
+         * Record outgoing HTTP calls made with RestTemplate, RestClient or WebClient built from the
+         * builders Spring Boot provides.
+         */
+        private boolean enabled = true;
+
+        /** Store request and response bodies (text content types only). WebClient bodies are never stored. */
+        private boolean recordBodies = true;
+
+        /** Bodies longer than this are truncated. */
+        private int maxBodySize = 64 * 1024;
+
+        /** Calls at or above this duration are tagged {@code slow}. */
+        private Duration slowThreshold = Duration.ofSeconds(1);
+
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(boolean enabled) {
+            this.enabled = enabled;
+        }
+
+        public boolean isRecordBodies() {
+            return recordBodies;
+        }
+
+        public void setRecordBodies(boolean recordBodies) {
+            this.recordBodies = recordBodies;
+        }
+
+        public int getMaxBodySize() {
+            return maxBodySize;
+        }
+
+        public void setMaxBodySize(int maxBodySize) {
+            this.maxBodySize = maxBodySize;
+        }
+
+        public Duration getSlowThreshold() {
+            return slowThreshold;
+        }
+
+        public void setSlowThreshold(Duration slowThreshold) {
+            this.slowThreshold = slowThreshold;
+        }
+    }
+
+    public static class Scheduled {
+
+        /** Record every run of @Scheduled methods; queries, logs and exceptions of a run are linked to it. */
+        private boolean enabled = true;
+
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(boolean enabled) {
+            this.enabled = enabled;
+        }
+    }
+
+    public static class Events {
+
+        /** Record application events published through the ApplicationContext. */
+        private boolean enabled = true;
+
+        /** Event classes (or payload classes) in these packages are not recorded. */
+        private List<String> ignorePackages = new ArrayList<>(List.of("org.springframework.",
+                "io.github.nebojsamitrovic.stethoscope.core.", "io.github.nebojsamitrovic.stethoscope.autoconfigure."));
+
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(boolean enabled) {
+            this.enabled = enabled;
+        }
+
+        public List<String> getIgnorePackages() {
+            return ignorePackages;
+        }
+
+        public void setIgnorePackages(List<String> ignorePackages) {
+            this.ignorePackages = ignorePackages;
+        }
+    }
+
+    public static class Cache {
+
+        /** Record cache hits, misses, puts and evictions by wrapping every CacheManager bean. */
+        private boolean enabled = true;
+
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(boolean enabled) {
+            this.enabled = enabled;
+        }
+    }
+
+    public static class Mail {
+
+        /** Record mail sent through JavaMailSender beans. */
+        private boolean enabled = true;
+
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(boolean enabled) {
+            this.enabled = enabled;
         }
     }
 }

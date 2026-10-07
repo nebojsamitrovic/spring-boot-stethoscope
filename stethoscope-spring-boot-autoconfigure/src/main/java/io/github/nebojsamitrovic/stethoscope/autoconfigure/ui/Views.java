@@ -8,7 +8,10 @@ import io.github.nebojsamitrovic.stethoscope.core.Entry;
 import io.github.nebojsamitrovic.stethoscope.core.EntryType;
 import java.time.Duration;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 
@@ -32,11 +35,12 @@ final class Views {
     // ---------------------------------------------------------------- layout
 
     static String page(ViewContext ctx, EntryType active, String title, String body) {
-        StringBuilder tabs = new StringBuilder();
+        StringBuilder nav = new StringBuilder();
         for (EntryType type : EntryType.values()) {
-            tabs.append("<a class=\"tab").append(type == active ? " active" : "").append("\" href=\"")
-                    .append(esc(ctx.link("/" + ViewContext.section(type)))).append("\">")
-                    .append(esc(type.label()))
+            nav.append("<a class=\"nav-item").append(type == active ? " active" : "").append("\" href=\"")
+                    .append(esc(ctx.link("/" + ViewContext.section(type)))).append("\"")
+                    .append(type == active ? " aria-current=\"page\"" : "").append(">")
+                    .append("<span>").append(esc(type.label())).append("</span>")
                     .append("<span class=\"count\">").append(ctx.counts().getOrDefault(type, 0L)).append("</span></a>");
         }
 
@@ -63,12 +67,14 @@ final class Views {
                 <body%s>
                 <header class="topbar">
                   <a class="brand" href="%s">%s<span>Stethoscope</span></a>
-                  <nav class="tabs">%s</nav>
                   <div class="actions">%s<button class="btn danger" hx-post="%s" hx-confirm="Clear all recorded entries?">Clear</button></div>
                 </header>
+                <div class="shell">
+                <nav class="sidebar" aria-label="Entry types">%s</nav>
                 <main>
                 %s
                 </main>
+                </div>
                 </body>
                 </html>
                 """.formatted(
@@ -77,9 +83,9 @@ final class Views {
                 esc(ctx.link("/assets/htmx.min.js")),
                 hxHeaders,
                 esc(ctx.link("/requests")), LOGO,
-                tabs,
                 recording,
                 esc(ctx.link("/clear")),
+                nav,
                 body);
     }
 
@@ -89,19 +95,25 @@ final class Views {
         String section = ViewContext.section(type);
         String rowsUrl = ctx.link("/" + section + "/rows");
 
-        StringBuilder options = new StringBuilder("<option value=\"\">All</option>");
-        for (String[] option : tagOptions(type)) {
-            options.append("<option value=\"").append(esc(option[0])).append("\"")
-                    .append(option[0].equals(tag) ? " selected" : "").append(">")
-                    .append(esc(option[1])).append("</option>");
+        String[][] tagOptions = tagOptions(type);
+        String select = "";
+        if (tagOptions.length > 0) {
+            StringBuilder options = new StringBuilder("<option value=\"\">All</option>");
+            for (String[] option : tagOptions) {
+                options.append("<option value=\"").append(esc(option[0])).append("\"")
+                        .append(option[0].equals(tag) ? " selected" : "").append(">")
+                        .append(esc(option[1])).append("</option>");
+            }
+            select = "<select name=\"tag\" aria-label=\"Filter\">" + options + "</select>";
         }
 
         String body = """
                 <div class="toolbar">
+                  <h1 class="page-title">%s</h1>
                   <form id="filters" class="filters" action="%s" method="get"
                         hx-get="%s" hx-target="#rows" hx-trigger="input changed delay:300ms, change">
                     <input type="search" name="q" value="%s" placeholder="%s" aria-label="Search" autocomplete="off">
-                    <select name="tag" aria-label="Filter">%s</select>
+                    %s
                   </form>
                   <label class="live"><input type="checkbox" id="live" checked> Live</label>
                 </div>
@@ -115,12 +127,13 @@ final class Views {
                 </table>
                 </div>
                 """.formatted(
+                esc(type.label()),
                 esc(ctx.link("/" + section)),
                 esc(rowsUrl),
                 esc(search),
                 esc(searchPlaceholder(type)),
-                options,
-                section,
+                select,
+                esc(section),
                 headerCells(type),
                 esc(rowsUrl),
                 rows(ctx, type, entries));
@@ -129,8 +142,7 @@ final class Views {
 
     static String rows(ViewContext ctx, EntryType type, List<Entry> entries) {
         if (entries.isEmpty()) {
-            return "<tr class=\"empty\"><td colspan=\"" + columnCount(type) + "\">"
-                   + "Nothing here yet. Use your app and entries will appear as they happen.</td></tr>";
+            return "<tr class=\"empty\"><td colspan=\"" + columnCount(type) + "\">" + esc(emptyText(type)) + "</td></tr>";
         }
         StringBuilder out = new StringBuilder();
         for (Entry entry : entries) {
@@ -138,6 +150,13 @@ final class Views {
                 case REQUEST -> requestRow(ctx, entry);
                 case QUERY -> queryRow(ctx, entry);
                 case EXCEPTION -> exceptionRow(ctx, entry);
+                case LOG -> logRow(ctx, entry);
+                case HTTP_CLIENT -> httpClientRow(ctx, entry);
+                case SCHEDULED -> scheduledRow(ctx, entry);
+                case EVENT -> eventRow(ctx, entry);
+                case CACHE -> cacheRow(ctx, entry);
+                case MAIL -> mailRow(ctx, entry);
+                case DUMP -> dumpRow(ctx, entry);
             });
         }
         return out.toString();
@@ -150,39 +169,114 @@ final class Views {
         long queries = e.getLong(Entry.Content.QUERY_COUNT, 0);
         return "<tr>"
                + "<td>" + methodBadge(e.getString(Entry.Content.METHOD, "")) + "</td>"
-               + "<td class=\"main\"><a class=\"row-link\" href=\"" + esc(ctx.link("/entries/" + e.id())) + "\">"
+               + "<td class=\"main\">" + entryLink(ctx, e, "")
                + esc(uri) + (query == null ? "" : "<span class=\"muted\">?" + esc(truncate(query, 60)) + "</span>")
                + "</a>" + (e.hasTag(Entry.Tags.HAS_EXCEPTION) ? " <span class=\"badge red\">exception</span>" : "")
                + "</td>"
                + "<td>" + statusBadge(status) + "</td>"
-               + "<td class=\"num" + (e.hasTag(Entry.Tags.SLOW) ? " warn" : "") + "\">" + e.getLong(Entry.Content.DURATION_MS, 0) + " ms</td>"
+               + durationCell(e)
                + "<td class=\"num\">" + queries
                + (e.hasTag(Entry.Tags.N_PLUS_ONE) ? " <span class=\"badge amber\">N+1</span>" : "") + "</td>"
-               + "<td class=\"when\">" + when(ctx, e) + "</td>"
+               + whenCell(ctx, e)
                + "</tr>\n";
     }
 
     private static String queryRow(ViewContext ctx, Entry e) {
         return "<tr>"
-               + "<td class=\"main\"><a class=\"row-link code\" href=\"" + esc(ctx.link("/entries/" + e.id())) + "\">"
+               + "<td class=\"main\">" + entryLink(ctx, e, "code")
                + esc(truncate(e.getString(Entry.Content.SQL, ""), 160)) + "</a>"
                + (e.hasTag(Entry.Tags.FAILED) ? " <span class=\"badge red\">failed</span>" : "")
                + "</td>"
                + "<td class=\"num" + (e.hasTag(Entry.Tags.SLOW) ? " warn" : "") + "\">" + e.getLong(Entry.Content.DURATION_MS, 0) + " ms"
                + (e.hasTag(Entry.Tags.SLOW) ? " <span class=\"badge amber\">slow</span>" : "") + "</td>"
-               + "<td class=\"when\">" + when(ctx, e) + "</td>"
+               + whenCell(ctx, e)
                + "</tr>\n";
     }
 
     private static String exceptionRow(ViewContext ctx, Entry e) {
         boolean handled = Boolean.TRUE.equals(e.get(Entry.Content.HANDLED));
         return "<tr>"
-               + "<td class=\"main\"><a class=\"row-link\" href=\"" + esc(ctx.link("/entries/" + e.id())) + "\">"
+               + "<td class=\"main\">" + entryLink(ctx, e, "")
                + "<strong>" + esc(simpleClassName(e.getString(Entry.Content.EXCEPTION_CLASS, ""))) + "</strong>"
                + " <span class=\"muted\">" + esc(truncate(e.getString(Entry.Content.MESSAGE, ""), 120)) + "</span></a></td>"
                + "<td class=\"code small\">" + esc(shortLocation(e.getString(Entry.Content.LOCATION, ""))) + "</td>"
                + "<td>" + (handled ? "<span class=\"badge\">handled</span>" : "<span class=\"badge red\">unhandled</span>") + "</td>"
-               + "<td class=\"when\">" + when(ctx, e) + "</td>"
+               + whenCell(ctx, e)
+               + "</tr>\n";
+    }
+
+    private static String logRow(ViewContext ctx, Entry e) {
+        return "<tr>"
+               + "<td>" + levelBadge(e.getString(Entry.Content.LEVEL, "")) + "</td>"
+               + "<td class=\"main\">" + entryLink(ctx, e, "")
+               + esc(truncate(e.getString(Entry.Content.MESSAGE, ""), 200)) + "</a>"
+               + (e.hasTag(Entry.Tags.HAS_EXCEPTION)
+                       ? " <span class=\"badge red\">" + esc(simpleClassName(e.getString(Entry.Content.EXCEPTION_CLASS, "exception"))) + "</span>"
+                       : "")
+               + "</td>"
+               + "<td class=\"code small muted\">" + esc(shortLogger(e.getString(Entry.Content.LOGGER, ""))) + "</td>"
+               + whenCell(ctx, e)
+               + "</tr>\n";
+    }
+
+    private static String httpClientRow(ViewContext ctx, Entry e) {
+        return "<tr>"
+               + "<td>" + methodBadge(e.getString(Entry.Content.METHOD, "")) + "</td>"
+               + "<td class=\"main\">" + entryLink(ctx, e, "code")
+               + esc(truncate(e.getString(Entry.Content.URL, ""), 160)) + "</a></td>"
+               + "<td>" + httpStatus(e) + "</td>"
+               + durationCell(e)
+               + whenCell(ctx, e)
+               + "</tr>\n";
+    }
+
+    private static String scheduledRow(ViewContext ctx, Entry e) {
+        return "<tr>"
+               + "<td class=\"main\">" + entryLink(ctx, e, "code")
+               + esc(shortTask(e.getString(Entry.Content.TASK, ""))) + "</a>"
+               + (e.hasTag(Entry.Tags.N_PLUS_ONE) ? " <span class=\"badge amber\">N+1</span>" : "") + "</td>"
+               + "<td>" + successBadge(e) + "</td>"
+               + durationCell(e)
+               + "<td class=\"num\">" + e.getLong(Entry.Content.QUERY_COUNT, 0) + "</td>"
+               + whenCell(ctx, e)
+               + "</tr>\n";
+    }
+
+    private static String eventRow(ViewContext ctx, Entry e) {
+        return "<tr>"
+               + "<td class=\"main\">" + entryLink(ctx, e, "")
+               + "<strong>" + esc(simpleClassName(e.getString(Entry.Content.EVENT_CLASS, ""))) + "</strong>"
+               + " <span class=\"muted code\">" + esc(truncate(e.getString(Entry.Content.PAYLOAD, ""), 140)) + "</span></a></td>"
+               + whenCell(ctx, e)
+               + "</tr>\n";
+    }
+
+    private static String cacheRow(ViewContext ctx, Entry e) {
+        return "<tr>"
+               + "<td>" + cacheBadge(e.getString(Entry.Content.OPERATION, "")) + "</td>"
+               + "<td class=\"main\">" + entryLink(ctx, e, "code")
+               + esc(truncate(e.getString(Entry.Content.KEY, "(all)"), 160)) + "</a></td>"
+               + "<td>" + esc(e.getString(Entry.Content.CACHE_NAME, "")) + "</td>"
+               + whenCell(ctx, e)
+               + "</tr>\n";
+    }
+
+    private static String mailRow(ViewContext ctx, Entry e) {
+        return "<tr>"
+               + "<td class=\"main\">" + entryLink(ctx, e, "")
+               + esc(truncate(e.getString(Entry.Content.SUBJECT, "(no subject)"), 140)) + "</a>"
+               + (e.hasTag(Entry.Tags.FAILED) ? " <span class=\"badge red\">failed</span>" : "") + "</td>"
+               + "<td class=\"small\">" + esc(truncate(joined(e.get(Entry.Content.TO)), 80)) + "</td>"
+               + whenCell(ctx, e)
+               + "</tr>\n";
+    }
+
+    private static String dumpRow(ViewContext ctx, Entry e) {
+        return "<tr>"
+               + "<td class=\"main\">" + entryLink(ctx, e, "code")
+               + esc(truncate(joined(e.get(Entry.Content.VALUES)), 160)) + "</a></td>"
+               + "<td class=\"code small\">" + esc(shortLocation(e.getString(Entry.Content.LOCATION, ""))) + "</td>"
+               + whenCell(ctx, e)
                + "</tr>\n";
     }
 
@@ -193,6 +287,13 @@ final class Views {
             case REQUEST -> requestDetail(ctx, entry, batch);
             case QUERY -> queryDetail(ctx, entry, batch);
             case EXCEPTION -> exceptionDetail(ctx, entry, batch);
+            case LOG -> logDetail(ctx, entry, batch);
+            case HTTP_CLIENT -> httpClientDetail(ctx, entry, batch);
+            case SCHEDULED -> scheduledDetail(ctx, entry, batch);
+            case EVENT -> eventDetail(ctx, entry, batch);
+            case CACHE -> cacheDetail(ctx, entry, batch);
+            case MAIL -> mailDetail(ctx, entry, batch);
+            case DUMP -> dumpDetail(ctx, entry, batch);
         };
         return page(ctx, entry.type(), title(entry), body);
     }
@@ -200,8 +301,6 @@ final class Views {
     private static String requestDetail(ViewContext ctx, Entry e, List<Entry> batch) {
         int status = (int) e.getLong(Entry.Content.STATUS, 0);
         String query = e.getString(Entry.Content.QUERY_STRING, null);
-        List<Entry> queries = batch.stream().filter(b -> b.type() == EntryType.QUERY).toList();
-        List<Entry> exceptions = batch.stream().filter(b -> b.type() == EntryType.EXCEPTION).toList();
 
         StringBuilder out = new StringBuilder();
         out.append(backLink(ctx, EntryType.REQUEST));
@@ -217,41 +316,8 @@ final class Views {
                 "Client IP", esc(e.getString(Entry.Content.CLIENT_IP, "—")),
                 "Queries", e.getLong(Entry.Content.QUERY_COUNT, 0) + " · " + e.getLong(Entry.Content.QUERY_TIME_MS, 0) + " ms"));
 
-        Map<String, Integer> duplicates = e.get(Entry.Content.DUPLICATE_QUERIES);
-        if (duplicates != null && !duplicates.isEmpty()) {
-            out.append("<div class=\"callout amber\"><strong>Possible N+1.</strong> These statements ran repeatedly in one request. "
-                       + "Consider a join fetch, an entity graph or batch loading.<ul>");
-            duplicates.forEach((sql, count) -> out.append("<li><span class=\"times\">× ").append(count)
-                    .append("</span><code>").append(esc(truncate(sql, 300))).append("</code></li>"));
-            out.append("</ul></div>");
-        }
-
-        if (!exceptions.isEmpty()) {
-            out.append("<section><h2>Exceptions</h2><ul class=\"links\">");
-            for (Entry ex : exceptions) {
-                out.append("<li><a href=\"").append(esc(ctx.link("/entries/" + ex.id()))).append("\"><strong>")
-                        .append(esc(simpleClassName(ex.getString(Entry.Content.EXCEPTION_CLASS, ""))))
-                        .append("</strong> <span class=\"muted\">")
-                        .append(esc(truncate(ex.getString(Entry.Content.MESSAGE, ""), 160)))
-                        .append("</span></a></li>");
-            }
-            out.append("</ul></section>");
-        }
-
-        out.append("<section><h2>Queries <span class=\"count\">").append(queries.size()).append("</span></h2>");
-        if (queries.isEmpty()) {
-            out.append("<p class=\"muted\">No queries were recorded for this request.</p>");
-        } else {
-            out.append("<div class=\"table-wrap\"><table class=\"entries\"><thead><tr><th>Query</th><th class=\"num\">Duration</th></tr></thead><tbody>");
-            for (Entry q : queries) {
-                out.append("<tr><td class=\"main\"><a class=\"row-link code\" href=\"").append(esc(ctx.link("/entries/" + q.id())))
-                        .append("\">").append(esc(truncate(q.getString(Entry.Content.SQL, ""), 200))).append("</a></td>")
-                        .append("<td class=\"num").append(q.hasTag(Entry.Tags.SLOW) ? " warn" : "").append("\">")
-                        .append(q.getLong(Entry.Content.DURATION_MS, 0)).append(" ms</td></tr>");
-            }
-            out.append("</tbody></table></div>");
-        }
-        out.append("</section>");
+        out.append(duplicateQueries(e));
+        out.append(related(ctx, e, batch));
 
         out.append(keyValueSection("Request headers", e.get(Entry.Content.REQUEST_HEADERS)));
         out.append(bodySection("Request body", e.getString(Entry.Content.REQUEST_BODY, null)));
@@ -275,7 +341,7 @@ final class Views {
                 "Time", esc(DATE_TIME.format(e.createdAt().atZone(ctx.zone()))),
                 "Duration", e.getLong(Entry.Content.DURATION_MS, 0) + " ms",
                 "Data source", esc(e.getString(Entry.Content.DATA_SOURCE, "—")),
-                "Request", requestLink(ctx, batch)));
+                originLabel(batch), originLink(ctx, batch)));
         out.append("<section><h2>SQL</h2><pre class=\"block sql\">").append(esc(e.getString(Entry.Content.SQL, "")))
                 .append("</pre></section>");
 
@@ -307,10 +373,146 @@ final class Views {
                 "Time", esc(DATE_TIME.format(e.createdAt().atZone(ctx.zone()))),
                 "Class", "<span class=\"code\">" + esc(e.getString(Entry.Content.EXCEPTION_CLASS, "")) + "</span>",
                 "Location", "<span class=\"code\">" + esc(e.getString(Entry.Content.LOCATION, "—")) + "</span>",
-                "Request", requestLink(ctx, batch)));
-        out.append("<section><h2>Stack trace</h2><pre class=\"block\">")
-                .append(esc(e.getString(Entry.Content.STACK_TRACE, "")))
-                .append("</pre></section>");
+                originLabel(batch), originLink(ctx, batch)));
+        out.append(bodySection("Stack trace", e.getString(Entry.Content.STACK_TRACE, "")));
+        return out.toString();
+    }
+
+    private static String logDetail(ViewContext ctx, Entry e, List<Entry> batch) {
+        StringBuilder out = new StringBuilder();
+        out.append(backLink(ctx, EntryType.LOG));
+        out.append("<div class=\"detail-head\">").append(levelBadge(e.getString(Entry.Content.LEVEL, "")))
+                .append("<h1 class=\"code\">").append(esc(shortLogger(e.getString(Entry.Content.LOGGER, "")))).append("</h1></div>");
+        out.append(facts(
+                "Time", esc(DATE_TIME.format(e.createdAt().atZone(ctx.zone()))),
+                "Logger", "<span class=\"code\">" + esc(e.getString(Entry.Content.LOGGER, "")) + "</span>",
+                "Thread", esc(e.getString(Entry.Content.THREAD, "—")),
+                originLabel(batch), originLink(ctx, batch)));
+        out.append(bodySection("Message", e.getString(Entry.Content.MESSAGE, "")));
+        out.append(keyValueSection("MDC", e.get(Entry.Content.MDC)));
+        out.append(bodySection("Stack trace", e.getString(Entry.Content.STACK_TRACE, null)));
+        return out.toString();
+    }
+
+    private static String httpClientDetail(ViewContext ctx, Entry e, List<Entry> batch) {
+        StringBuilder out = new StringBuilder();
+        out.append(backLink(ctx, EntryType.HTTP_CLIENT));
+        out.append("<div class=\"detail-head\">").append(methodBadge(e.getString(Entry.Content.METHOD, "")))
+                .append("<h1 class=\"code\">").append(esc(e.getString(Entry.Content.URL, ""))).append("</h1>")
+                .append(httpStatus(e)).append("</div>");
+        out.append(facts(
+                "Time", esc(DATE_TIME.format(e.createdAt().atZone(ctx.zone()))),
+                "Duration", e.getLong(Entry.Content.DURATION_MS, 0) + " ms",
+                originLabel(batch), originLink(ctx, batch)));
+        out.append(errorCallout(e));
+        out.append(keyValueSection("Request headers", e.get(Entry.Content.REQUEST_HEADERS)));
+        out.append(bodySection("Request body", e.getString(Entry.Content.REQUEST_BODY, null)));
+        out.append(keyValueSection("Response headers", e.get(Entry.Content.RESPONSE_HEADERS)));
+        out.append(bodySection("Response body", e.getString(Entry.Content.RESPONSE_BODY, null)));
+        return out.toString();
+    }
+
+    private static String scheduledDetail(ViewContext ctx, Entry e, List<Entry> batch) {
+        StringBuilder out = new StringBuilder();
+        out.append(backLink(ctx, EntryType.SCHEDULED));
+        out.append("<div class=\"detail-head\"><h1 class=\"code\">").append(esc(shortTask(e.getString(Entry.Content.TASK, ""))))
+                .append("</h1>").append(successBadge(e)).append("</div>");
+        out.append(facts(
+                "Time", esc(DATE_TIME.format(e.createdAt().atZone(ctx.zone()))),
+                "Task", "<span class=\"code\">" + esc(e.getString(Entry.Content.TASK, "")) + "</span>",
+                "Duration", e.getLong(Entry.Content.DURATION_MS, 0) + " ms",
+                "Thread", esc(e.getString(Entry.Content.THREAD, "—")),
+                "Queries", e.getLong(Entry.Content.QUERY_COUNT, 0) + " · " + e.getLong(Entry.Content.QUERY_TIME_MS, 0) + " ms"));
+        out.append(errorCallout(e));
+        out.append(duplicateQueries(e));
+        out.append(related(ctx, e, batch));
+        return out.toString();
+    }
+
+    private static String eventDetail(ViewContext ctx, Entry e, List<Entry> batch) {
+        StringBuilder out = new StringBuilder();
+        out.append(backLink(ctx, EntryType.EVENT));
+        out.append("<div class=\"detail-head\"><h1>").append(esc(simpleClassName(e.getString(Entry.Content.EVENT_CLASS, ""))))
+                .append("</h1></div>");
+        out.append(facts(
+                "Time", esc(DATE_TIME.format(e.createdAt().atZone(ctx.zone()))),
+                "Class", "<span class=\"code\">" + esc(e.getString(Entry.Content.EVENT_CLASS, "")) + "</span>",
+                "Source", "<span class=\"code\">" + esc(e.getString(Entry.Content.SOURCE, "—")) + "</span>",
+                originLabel(batch), originLink(ctx, batch)));
+        out.append(bodySection("Payload", e.getString(Entry.Content.PAYLOAD, "")));
+        return out.toString();
+    }
+
+    private static String cacheDetail(ViewContext ctx, Entry e, List<Entry> batch) {
+        StringBuilder out = new StringBuilder();
+        out.append(backLink(ctx, EntryType.CACHE));
+        out.append("<div class=\"detail-head\">").append(cacheBadge(e.getString(Entry.Content.OPERATION, "")))
+                .append("<h1>").append(esc(e.getString(Entry.Content.CACHE_NAME, ""))).append("</h1></div>");
+        out.append(facts(
+                "Time", esc(DATE_TIME.format(e.createdAt().atZone(ctx.zone()))),
+                "Cache", esc(e.getString(Entry.Content.CACHE_NAME, "")),
+                "Operation", esc(e.getString(Entry.Content.OPERATION, "")),
+                originLabel(batch), originLink(ctx, batch)));
+        out.append(bodySection("Key", e.getString(Entry.Content.KEY, null)));
+        out.append(bodySection("Value", e.getString(Entry.Content.VALUE, null)));
+        return out.toString();
+    }
+
+    private static String mailDetail(ViewContext ctx, Entry e, List<Entry> batch) {
+        StringBuilder out = new StringBuilder();
+        out.append(backLink(ctx, EntryType.MAIL));
+        out.append("<div class=\"detail-head\"><h1>").append(esc(e.getString(Entry.Content.SUBJECT, "(no subject)"))).append("</h1>")
+                .append(e.hasTag(Entry.Tags.FAILED) ? "<span class=\"badge red\">failed</span>" : "<span class=\"badge green\">sent</span>")
+                .append("</div>");
+        List<String> pairs = new ArrayList<>(List.of(
+                "Time", esc(DATE_TIME.format(e.createdAt().atZone(ctx.zone()))),
+                "From", esc(joined(e.get(Entry.Content.FROM))),
+                "To", esc(joined(e.get(Entry.Content.TO)))));
+        for (String[] optional : new String[][] {{"Cc", Entry.Content.CC}, {"Bcc", Entry.Content.BCC}}) {
+            Collection<?> values = e.get(optional[1]);
+            if (values != null && !values.isEmpty()) {
+                pairs.add(optional[0]);
+                pairs.add(esc(joined(values)));
+            }
+        }
+        pairs.add(originLabel(batch));
+        pairs.add(originLink(ctx, batch));
+        out.append(facts(pairs.toArray(String[]::new)));
+        out.append(errorCallout(e));
+
+        List<String> attachments = e.get(Entry.Content.ATTACHMENTS);
+        if (attachments != null && !attachments.isEmpty()) {
+            out.append("<section><h2>Attachments</h2><ul class=\"links\">");
+            for (String attachment : attachments) {
+                out.append("<li class=\"code\">").append(esc(attachment)).append("</li>");
+            }
+            out.append("</ul></section>");
+        }
+        String html = e.getString(Entry.Content.HTML_BODY, null);
+        if (html != null) {
+            // sandbox without allow-scripts / allow-same-origin: the mail cannot run code or reach the dashboard
+            out.append("<section><h2>Preview</h2><iframe class=\"mail-preview\" sandbox title=\"Mail preview\" srcdoc=\"")
+                    .append(esc(html)).append("\"></iframe></section>");
+        }
+        out.append(bodySection("Text", e.getString(Entry.Content.TEXT_BODY, null)));
+        out.append(bodySection("HTML source", html));
+        return out.toString();
+    }
+
+    private static String dumpDetail(ViewContext ctx, Entry e, List<Entry> batch) {
+        StringBuilder out = new StringBuilder();
+        out.append(backLink(ctx, EntryType.DUMP));
+        out.append("<div class=\"detail-head\"><h1>Dump</h1></div>");
+        out.append(facts(
+                "Time", esc(DATE_TIME.format(e.createdAt().atZone(ctx.zone()))),
+                "Location", "<span class=\"code\">" + esc(e.getString(Entry.Content.LOCATION, "—")) + "</span>",
+                originLabel(batch), originLink(ctx, batch)));
+        List<String> values = e.get(Entry.Content.VALUES);
+        if (values != null) {
+            for (int i = 0; i < values.size(); i++) {
+                out.append(bodySection(values.size() == 1 ? "Value" : "Value " + (i + 1), values.get(i)));
+            }
+        }
         return out.toString();
     }
 
@@ -322,16 +524,105 @@ final class Views {
 
     // ---------------------------------------------------------------- pieces
 
+    /** Everything else recorded in the same batch, grouped by type, as Telescope shows under a request. */
+    private static String related(ViewContext ctx, Entry self, List<Entry> batch) {
+        StringBuilder out = new StringBuilder();
+        for (EntryType type : EntryType.values()) {
+            if (type == EntryType.REQUEST || type == EntryType.SCHEDULED) {
+                continue;
+            }
+            List<Entry> ofType = batch.stream().filter(b -> b.type() == type && b.id() != self.id()).toList();
+            if (ofType.isEmpty() && type != EntryType.QUERY) {
+                continue;
+            }
+            out.append("<section><h2>").append(esc(type.label())).append(" <span class=\"count\">")
+                    .append(ofType.size()).append("</span></h2>");
+            if (ofType.isEmpty()) {
+                out.append("<p class=\"muted\">No queries were recorded.</p></section>");
+                continue;
+            }
+            out.append("<div class=\"table-wrap\"><table class=\"entries\"><tbody>");
+            for (Entry entry : ofType) {
+                out.append("<tr><td class=\"main\">").append(entryLink(ctx, entry, summaryIsCode(type) ? "code" : ""))
+                        .append(summary(entry)).append("</a></td>");
+                if (entry.content().containsKey(Entry.Content.DURATION_MS)) {
+                    out.append(durationCell(entry));
+                } else {
+                    out.append("<td></td>");
+                }
+                out.append("</tr>");
+            }
+            out.append("</tbody></table></div></section>");
+        }
+        return out.toString();
+    }
+
+    /** One-line, already-escaped description of an entry. */
+    private static String summary(Entry e) {
+        return switch (e.type()) {
+            case REQUEST -> esc(e.getString(Entry.Content.METHOD, "") + " " + e.getString(Entry.Content.URI, ""));
+            case QUERY -> esc(truncate(e.getString(Entry.Content.SQL, ""), 200));
+            case EXCEPTION -> "<strong>" + esc(simpleClassName(e.getString(Entry.Content.EXCEPTION_CLASS, ""))) + "</strong> <span class=\"muted\">"
+                              + esc(truncate(e.getString(Entry.Content.MESSAGE, ""), 160)) + "</span>";
+            case LOG -> levelBadge(e.getString(Entry.Content.LEVEL, "")) + " " + esc(truncate(e.getString(Entry.Content.MESSAGE, ""), 180));
+            case HTTP_CLIENT -> methodBadge(e.getString(Entry.Content.METHOD, "")) + " " + esc(truncate(e.getString(Entry.Content.URL, ""), 160))
+                                + " " + httpStatus(e);
+            case SCHEDULED -> esc(shortTask(e.getString(Entry.Content.TASK, "")));
+            case EVENT -> "<strong>" + esc(simpleClassName(e.getString(Entry.Content.EVENT_CLASS, ""))) + "</strong>";
+            case CACHE -> cacheBadge(e.getString(Entry.Content.OPERATION, "")) + " " + esc(e.getString(Entry.Content.CACHE_NAME, ""))
+                          + " <span class=\"muted\">" + esc(truncate(e.getString(Entry.Content.KEY, ""), 120)) + "</span>";
+            case MAIL -> esc(e.getString(Entry.Content.SUBJECT, "(no subject)")) + " <span class=\"muted\">→ "
+                         + esc(truncate(joined(e.get(Entry.Content.TO)), 80)) + "</span>";
+            case DUMP -> esc(truncate(joined(e.get(Entry.Content.VALUES)), 180));
+        };
+    }
+
+    private static boolean summaryIsCode(EntryType type) {
+        return type == EntryType.QUERY || type == EntryType.DUMP;
+    }
+
+    private static String duplicateQueries(Entry e) {
+        Map<String, Integer> duplicates = e.get(Entry.Content.DUPLICATE_QUERIES);
+        if (duplicates == null || duplicates.isEmpty()) {
+            return "";
+        }
+        StringBuilder out = new StringBuilder("<div class=\"callout amber\"><strong>Possible N+1.</strong> These statements ran repeatedly. "
+                                              + "Consider a join fetch, an entity graph or batch loading.<ul>");
+        duplicates.forEach((sql, count) -> out.append("<li><span class=\"times\">× ").append(count)
+                .append("</span><code>").append(esc(truncate(sql, 300))).append("</code></li>"));
+        return out.append("</ul></div>").toString();
+    }
+
+    private static String errorCallout(Entry e) {
+        String error = e.getString(Entry.Content.ERROR, null);
+        return error == null ? "" : "<div class=\"callout red\"><strong>Failed.</strong> <span class=\"code\">" + esc(error) + "</span></div>";
+    }
+
     private static String backLink(ViewContext ctx, EntryType type) {
         return "<a class=\"back\" href=\"" + esc(ctx.link("/" + ViewContext.section(type))) + "\">← "
                + esc(type.label()) + "</a>";
     }
 
-    private static String requestLink(ViewContext ctx, List<Entry> batch) {
-        Optional<Entry> request = batch.stream().filter(b -> b.type() == EntryType.REQUEST).findFirst();
-        return request.map(r -> "<a href=\"" + esc(ctx.link("/entries/" + r.id())) + "\">"
-                                 + esc(r.getString(Entry.Content.METHOD, "")) + " "
-                                 + esc(r.getString(Entry.Content.URI, "")) + "</a>")
+    private static String entryLink(ViewContext ctx, Entry e, String cssClass) {
+        return "<a class=\"row-link" + (cssClass.isEmpty() ? "" : " " + cssClass) + "\" href=\""
+               + esc(ctx.link("/entries/" + e.id())) + "\">";
+    }
+
+    /** The request or scheduled run an entry belongs to. */
+    private static Optional<Entry> origin(List<Entry> batch) {
+        return batch.stream().filter(b -> b.type() == EntryType.REQUEST || b.type() == EntryType.SCHEDULED).findFirst();
+    }
+
+    private static String originLabel(List<Entry> batch) {
+        return origin(batch).map(o -> o.type() == EntryType.SCHEDULED ? "Scheduled run" : "Request").orElse("Request");
+    }
+
+    private static String originLink(ViewContext ctx, List<Entry> batch) {
+        return origin(batch).map(o -> "<a href=\"" + esc(ctx.link("/entries/" + o.id())) + "\">"
+                                      + (o.type() == EntryType.SCHEDULED
+                                              ? esc(shortTask(o.getString(Entry.Content.TASK, "")))
+                                              : esc(o.getString(Entry.Content.METHOD, "")) + " " + esc(o.getString(Entry.Content.URI, "")))
+                                      + "</a>")
                 .orElse("—");
     }
 
@@ -361,13 +652,53 @@ final class Views {
         return "<section><h2>" + esc(title) + "</h2><pre class=\"block\">" + esc(body) + "</pre></section>";
     }
 
+    private static String durationCell(Entry e) {
+        return "<td class=\"num" + (e.hasTag(Entry.Tags.SLOW) ? " warn" : "") + "\">" + e.getLong(Entry.Content.DURATION_MS, 0) + " ms</td>";
+    }
+
+    private static String whenCell(ViewContext ctx, Entry e) {
+        return "<td class=\"when\">" + when(ctx, e) + "</td>";
+    }
+
     private static String methodBadge(String method) {
-        return "<span class=\"method m-" + esc(method.toLowerCase(java.util.Locale.ROOT)) + "\">" + esc(method) + "</span>";
+        return "<span class=\"method m-" + esc(method.toLowerCase(Locale.ROOT)) + "\">" + esc(method) + "</span>";
     }
 
     private static String statusBadge(int status) {
         String tone = status >= 500 ? "red" : status >= 400 ? "amber" : status >= 300 ? "blue" : "green";
         return "<span class=\"status " + tone + "\">" + status + "</span>";
+    }
+
+    private static String httpStatus(Entry e) {
+        return e.content().containsKey(Entry.Content.STATUS)
+                ? statusBadge((int) e.getLong(Entry.Content.STATUS, 0))
+                : "<span class=\"status red\">error</span>";
+    }
+
+    private static String successBadge(Entry e) {
+        return Boolean.FALSE.equals(e.get(Entry.Content.SUCCESS))
+                ? "<span class=\"badge red\">failed</span>"
+                : "<span class=\"badge green\">ok</span>";
+    }
+
+    private static String levelBadge(String level) {
+        String tone = switch (level.toUpperCase(Locale.ROOT)) {
+            case "ERROR" -> " red";
+            case "WARN" -> " amber";
+            case "INFO" -> " blue";
+            default -> "";
+        };
+        return "<span class=\"level" + tone + "\">" + esc(level) + "</span>";
+    }
+
+    private static String cacheBadge(String operation) {
+        String tone = switch (operation) {
+            case "hit" -> " green";
+            case "miss" -> " amber";
+            case "evict", "clear" -> " red";
+            default -> " blue";
+        };
+        return "<span class=\"level" + tone + "\">" + esc(operation) + "</span>";
     }
 
     private static String when(ViewContext ctx, Entry e) {
@@ -402,11 +733,47 @@ final class Views {
         return line.isEmpty() ? shortMethod : shortMethod + ":" + line;
     }
 
+    /** {@code com.acme.jobs.Cleanup#purge} → {@code Cleanup#purge}. */
+    private static String shortTask(String task) {
+        int hash = task.indexOf('#');
+        String type = hash < 0 ? task : task.substring(0, hash);
+        return simpleClassName(type) + (hash < 0 ? "" : task.substring(hash));
+    }
+
+    /** {@code org.springframework.web.servlet.DispatcherServlet} → {@code o.s.w.s.DispatcherServlet}. */
+    static String shortLogger(String logger) {
+        String[] parts = logger.split("\\.");
+        if (parts.length <= 1) {
+            return logger;
+        }
+        StringBuilder out = new StringBuilder();
+        for (int i = 0; i < parts.length - 1; i++) {
+            if (!parts[i].isEmpty()) {
+                out.append(parts[i].charAt(0)).append('.');
+            }
+        }
+        return out.append(parts[parts.length - 1]).toString();
+    }
+
+    private static String joined(Object values) {
+        if (values instanceof Collection<?> collection) {
+            return String.join(", ", collection.stream().map(String::valueOf).toList());
+        }
+        return values == null ? "" : String.valueOf(values);
+    }
+
     private static String title(Entry e) {
         return switch (e.type()) {
             case REQUEST -> e.getString(Entry.Content.METHOD, "") + " " + e.getString(Entry.Content.URI, "");
             case QUERY -> "Query #" + e.id();
             case EXCEPTION -> simpleClassName(e.getString(Entry.Content.EXCEPTION_CLASS, "Exception"));
+            case LOG -> e.getString(Entry.Content.LEVEL, "Log") + " " + shortLogger(e.getString(Entry.Content.LOGGER, ""));
+            case HTTP_CLIENT -> e.getString(Entry.Content.METHOD, "") + " " + e.getString(Entry.Content.URL, "");
+            case SCHEDULED -> shortTask(e.getString(Entry.Content.TASK, "Scheduled task"));
+            case EVENT -> simpleClassName(e.getString(Entry.Content.EVENT_CLASS, "Event"));
+            case CACHE -> "Cache " + e.getString(Entry.Content.OPERATION, "");
+            case MAIL -> e.getString(Entry.Content.SUBJECT, "Mail");
+            case DUMP -> "Dump #" + e.id();
         };
     }
 
@@ -416,14 +783,35 @@ final class Views {
                             + "<th class=\"num\">Queries</th><th>When</th>";
             case QUERY -> "<th>Query</th><th class=\"num\">Duration</th><th>When</th>";
             case EXCEPTION -> "<th>Exception</th><th>Location</th><th>Handled</th><th>When</th>";
+            case LOG -> "<th>Level</th><th>Message</th><th>Logger</th><th>When</th>";
+            case HTTP_CLIENT -> "<th>Method</th><th>URL</th><th>Status</th><th class=\"num\">Duration</th><th>When</th>";
+            case SCHEDULED -> "<th>Task</th><th>Status</th><th class=\"num\">Duration</th><th class=\"num\">Queries</th><th>When</th>";
+            case EVENT -> "<th>Event</th><th>When</th>";
+            case CACHE -> "<th>Operation</th><th>Key</th><th>Cache</th><th>When</th>";
+            case MAIL -> "<th>Subject</th><th>To</th><th>When</th>";
+            case DUMP -> "<th>Value</th><th>Location</th><th>When</th>";
         };
     }
 
     private static int columnCount(EntryType type) {
         return switch (type) {
             case REQUEST -> 6;
-            case QUERY -> 3;
-            case EXCEPTION -> 4;
+            case HTTP_CLIENT, SCHEDULED -> 5;
+            case EXCEPTION, LOG, CACHE -> 4;
+            case QUERY, MAIL, DUMP -> 3;
+            case EVENT -> 2;
+        };
+    }
+
+    private static String emptyText(EntryType type) {
+        return switch (type) {
+            case SCHEDULED -> "No scheduled runs yet. @Scheduled methods show up here once they run (requires @EnableScheduling).";
+            case HTTP_CLIENT -> "No outgoing calls yet. Calls made with RestTemplate, RestClient or WebClient built "
+                                + "from Spring Boot's builders show up here.";
+            case DUMP -> "Nothing dumped yet. Call Stethoscope.dump(value) anywhere in your code.";
+            case MAIL -> "No mail sent yet. Mail sent through a JavaMailSender bean shows up here.";
+            case CACHE -> "No cache activity yet. Operations on Spring's CacheManager (e.g. @Cacheable) show up here.";
+            default -> "Nothing here yet. Use your app and entries will appear as they happen.";
         };
     }
 
@@ -432,6 +820,13 @@ final class Views {
             case REQUEST -> "Filter by method or path…";
             case QUERY -> "Filter by SQL…";
             case EXCEPTION -> "Filter by class or message…";
+            case LOG -> "Filter by logger or message…";
+            case HTTP_CLIENT -> "Filter by method or URL…";
+            case SCHEDULED -> "Filter by task…";
+            case EVENT -> "Filter by event class or payload…";
+            case CACHE -> "Filter by cache or key…";
+            case MAIL -> "Filter by subject or recipient…";
+            case DUMP -> "Filter by value…";
         };
     }
 
@@ -442,6 +837,15 @@ final class Views {
                     {Entry.Tags.N_PLUS_ONE, "N+1 queries"}, {Entry.Tags.HAS_EXCEPTION, "With exception"}};
             case QUERY -> new String[][] {{Entry.Tags.SLOW, "Slow"}, {Entry.Tags.FAILED, "Failed"}};
             case EXCEPTION -> new String[][] {{"unhandled", "Unhandled"}, {"handled", "Handled"}};
+            case LOG -> new String[][] {
+                    {"error", "Error"}, {"warn", "Warn"}, {"info", "Info"}, {"debug", "Debug"}, {"trace", "Trace"},
+                    {Entry.Tags.HAS_EXCEPTION, "With exception"}};
+            case HTTP_CLIENT -> new String[][] {{Entry.Tags.FAILED, "Failed"}, {Entry.Tags.SLOW, "Slow"}};
+            case SCHEDULED -> new String[][] {
+                    {Entry.Tags.FAILED, "Failed"}, {Entry.Tags.N_PLUS_ONE, "N+1 queries"}, {Entry.Tags.HAS_EXCEPTION, "With exception"}};
+            case CACHE -> new String[][] {{"hit", "Hits"}, {"miss", "Misses"}, {"put", "Puts"}, {"evict", "Evictions"}, {"clear", "Clears"}};
+            case MAIL -> new String[][] {{Entry.Tags.FAILED, "Failed"}};
+            case EVENT, DUMP -> new String[0][];
         };
     }
 

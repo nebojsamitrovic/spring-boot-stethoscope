@@ -2,6 +2,7 @@ package io.github.nebojsamitrovic.stethoscope.autoconfigure.web;
 
 import io.github.nebojsamitrovic.stethoscope.autoconfigure.StethoscopeGate;
 import io.github.nebojsamitrovic.stethoscope.autoconfigure.StethoscopeProperties;
+import io.github.nebojsamitrovic.stethoscope.autoconfigure.support.Bodies;
 import io.github.nebojsamitrovic.stethoscope.core.Batch;
 import io.github.nebojsamitrovic.stethoscope.core.BatchContext;
 import io.github.nebojsamitrovic.stethoscope.core.Entry;
@@ -13,14 +14,11 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
-import java.nio.charset.Charset;
-import java.nio.charset.StandardCharsets;
 import java.util.Collection;
 import java.util.Enumeration;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import org.springframework.core.Ordered;
@@ -43,9 +41,6 @@ public class RequestWatcherFilter extends OncePerRequestFilter implements Ordere
 
     /** Runs early, but leaves room for filters that must run before it (e.g. request-id filters). */
     public static final int ORDER = Ordered.HIGHEST_PRECEDENCE + 10;
-
-    private static final Set<String> TEXT_SUBTYPES = Set.of("json", "xml", "x-www-form-urlencoded", "javascript",
-            "graphql", "problem+json", "hal+json", "x-ndjson");
 
     private final Recorder recorder;
     private final Redactor redactor;
@@ -256,37 +251,11 @@ public class RequestWatcherFilter extends OncePerRequestFilter implements Ordere
     }
 
     static boolean isText(String contentType) {
-        if (contentType == null) {
-            return false;
-        }
-        String type = contentType.toLowerCase(Locale.ROOT);
-        int semicolon = type.indexOf(';');
-        if (semicolon >= 0) {
-            type = type.substring(0, semicolon);
-        }
-        type = type.trim();
-        if (type.startsWith("text/")) {
-            return true;
-        }
-        int slash = type.indexOf('/');
-        if (slash < 0) {
-            return false;
-        }
-        String subtype = type.substring(slash + 1);
-        return TEXT_SUBTYPES.contains(subtype) || subtype.endsWith("+json") || subtype.endsWith("+xml");
+        return Bodies.isText(contentType);
     }
 
     private String toText(byte[] bytes, String encoding) {
-        int max = properties.getRequests().getMaxBodySize();
-        int length = Math.min(bytes.length, max);
-        Charset charset;
-        try {
-            charset = encoding == null ? StandardCharsets.UTF_8 : Charset.forName(encoding);
-        } catch (RuntimeException ex) {
-            charset = StandardCharsets.UTF_8;
-        }
-        String text = new String(bytes, 0, length, charset);
-        return bytes.length > max ? text + "\n… (truncated, " + bytes.length + " bytes total)" : text;
+        return Bodies.toText(bytes, bytes.length, encoding, properties.getRequests().getMaxBodySize(), bytes.length);
     }
 
     private static Throwable unwrap(Throwable failure) {

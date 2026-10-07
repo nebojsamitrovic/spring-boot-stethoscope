@@ -3,6 +3,7 @@ package io.github.nebojsamitrovic.stethoscope.core;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.Deque;
 import java.util.EnumMap;
 import java.util.HashMap;
@@ -12,39 +13,38 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
- * Bounded, thread-safe ring buffer. When full, the oldest entry is evicted.
+ * Bounded, thread-safe ring buffer with one buffer per {@link EntryType}. When a type's buffer is
+ * full, its oldest entry is evicted, so a chatty watcher (logs, cache) never pushes requests out.
  *
  * <p>Nothing survives a restart, which is exactly what you want from a dev tool.
  */
 public class InMemoryEntryStore implements EntryStore {
 
     private final int capacity;
-    private final Deque<Entry> entries;
+    private final Map<EntryType, Deque<Entry>> entries = new EnumMap<>(EntryType.class);
     private final Map<Long, Entry> byId = new HashMap<>();
-    private final Map<EntryType, Long> counts = new EnumMap<>(EntryType.class);
 
+    /** @param capacity maximum number of entries kept per type */
     public InMemoryEntryStore(int capacity) {
         if (capacity < 1) {
             throw new IllegalArgumentException("capacity must be >= 1, was " + capacity);
         }
         this.capacity = capacity;
-        this.entries = new ArrayDeque<>(Math.min(capacity, 4096));
     }
 
+    /** Maximum number of entries kept per type. */
     public int capacity() {
         return capacity;
     }
 
     @Override
     public synchronized void store(Entry entry) {
-        while (entries.size() >= capacity) {
-            Entry evicted = entries.pollFirst();
-            byId.remove(evicted.id());
-            counts.merge(evicted.type(), -1L, Long::sum);
+        Deque<Entry> buffer = entries.computeIfAbsent(entry.type(), t -> new ArrayDeque<>(Math.min(capacity, 256)));
+        while (buffer.size() >= capacity) {
+            byId.remove(buffer.pollFirst().id());
         }
-        entries.addLast(entry);
+        buffer.addLast(entry);
         byId.put(entry.id(), entry);
-        counts.merge(entry.type(), 1L, Long::sum);
     }
 
     @Override
@@ -54,8 +54,20 @@ public class InMemoryEntryStore implements EntryStore {
 
     @Override
     public synchronized List<Entry> list(EntryQuery query) {
-        List<Entry> result = new ArrayList<>(Math.min(query.limit(), entries.size()));
-        Iterator<Entry> newestFirst = entries.descendingIterator();
+        if (query.type() != null) {
+            return newestMatching(entries.getOrDefault(query.type(), new ArrayDeque<>()), query);
+        }
+        List<Entry> result = new ArrayList<>();
+        for (Deque<Entry> buffer : entries.values()) {
+            result.addAll(newestMatching(buffer, query));
+        }
+        result.sort(Comparator.comparingLong(Entry::id).reversed());
+        return Collections.unmodifiableList(result.subList(0, Math.min(query.limit(), result.size())));
+    }
+
+    private static List<Entry> newestMatching(Deque<Entry> buffer, EntryQuery query) {
+        List<Entry> result = new ArrayList<>(Math.min(query.limit(), buffer.size()));
+        Iterator<Entry> newestFirst = buffer.descendingIterator();
         while (newestFirst.hasNext() && result.size() < query.limit()) {
             Entry entry = newestFirst.next();
             if (query.matches(entry)) {
@@ -71,23 +83,26 @@ public class InMemoryEntryStore implements EntryStore {
             return List.of();
         }
         List<Entry> result = new ArrayList<>();
-        for (Entry entry : entries) {
-            if (batchId.equals(entry.batchId())) {
-                result.add(entry);
+        for (Deque<Entry> buffer : entries.values()) {
+            for (Entry entry : buffer) {
+                if (batchId.equals(entry.batchId())) {
+                    result.add(entry);
+                }
             }
         }
+        result.sort(Comparator.comparingLong(Entry::id));
         return Collections.unmodifiableList(result);
     }
 
     @Override
     public synchronized long count(EntryType type) {
-        return counts.getOrDefault(type, 0L);
+        Deque<Entry> buffer = entries.get(type);
+        return buffer == null ? 0 : buffer.size();
     }
 
     @Override
     public synchronized void clear() {
         entries.clear();
         byId.clear();
-        counts.clear();
     }
 }

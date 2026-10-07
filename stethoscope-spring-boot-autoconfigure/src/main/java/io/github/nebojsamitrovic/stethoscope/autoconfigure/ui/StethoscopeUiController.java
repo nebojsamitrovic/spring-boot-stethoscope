@@ -64,24 +64,30 @@ public class StethoscopeUiController {
                 .build();
     }
 
-    @GetMapping("/{section:requests|queries|exceptions}")
+    @GetMapping("/{section:[a-z][a-z-]*}")
     public ResponseEntity<String> list(
             @PathVariable("section") String section,
             @RequestParam(name = "q", required = false) String search,
             @RequestParam(name = "tag", required = false) String tag,
             HttpServletRequest request) {
         EntryType type = ViewContext.fromSection(section);
+        if (type == null) {
+            return notFound(request);
+        }
         List<Entry> entries = store.list(new EntryQuery(type, tag, search, PAGE_SIZE));
         return html(Views.listPage(context(request), type, entries, search, tag));
     }
 
-    @GetMapping("/{section:requests|queries|exceptions}/rows")
+    @GetMapping("/{section:[a-z][a-z-]*}/rows")
     public ResponseEntity<String> rows(
             @PathVariable("section") String section,
             @RequestParam(name = "q", required = false) String search,
             @RequestParam(name = "tag", required = false) String tag,
             HttpServletRequest request) {
         EntryType type = ViewContext.fromSection(section);
+        if (type == null) {
+            return notFound(request);
+        }
         List<Entry> entries = store.list(new EntryQuery(type, tag, search, PAGE_SIZE));
         return html(Views.rows(context(request), type, entries));
     }
@@ -91,7 +97,7 @@ public class StethoscopeUiController {
         ViewContext ctx = context(request);
         return store.find(id)
                 .map(entry -> html(Views.detail(ctx, entry, store.batch(entry.batchId()))))
-                .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND).contentType(HTML).body(Views.notFound(ctx)));
+                .orElseGet(() -> notFound(ctx));
     }
 
     @PostMapping("/clear")
@@ -126,6 +132,14 @@ public class StethoscopeUiController {
     }
 
     // ---------------------------------------------------------------- helpers
+
+    private ResponseEntity<String> notFound(HttpServletRequest request) {
+        return notFound(context(request));
+    }
+
+    private static ResponseEntity<String> notFound(ViewContext ctx) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).contentType(HTML).body(Views.notFound(ctx));
+    }
 
     /** Tells htmx to reload the page; plain HTML forms are not used for these actions. */
     private static ResponseEntity<Void> refresh() {

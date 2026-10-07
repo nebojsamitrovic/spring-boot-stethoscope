@@ -90,6 +90,43 @@ public record Entry(
         public static final String STACK_TRACE = "stackTrace";
         public static final String HANDLED = "handled";
 
+        // log (also MESSAGE, STACK_TRACE)
+        public static final String LEVEL = "level";
+        public static final String LOGGER = "logger";
+        public static final String THREAD = "thread";
+        public static final String MDC = "mdc";
+
+        // outgoing HTTP (also METHOD, STATUS, DURATION_MS, *_HEADERS, *_BODY)
+        public static final String URL = "url";
+        public static final String ERROR = "error";
+
+        // scheduled task (also DURATION_MS, SUCCESS, ERROR, THREAD)
+        public static final String TASK = "task";
+
+        // application event
+        public static final String EVENT_CLASS = "eventClass";
+        public static final String PAYLOAD = "payload";
+        public static final String SOURCE = "source";
+
+        // cache
+        public static final String CACHE_NAME = "cache";
+        public static final String OPERATION = "operation";
+        public static final String KEY = "key";
+        public static final String VALUE = "value";
+
+        // mail (also ERROR)
+        public static final String FROM = "from";
+        public static final String TO = "to";
+        public static final String CC = "cc";
+        public static final String BCC = "bcc";
+        public static final String SUBJECT = "subject";
+        public static final String TEXT_BODY = "text";
+        public static final String HTML_BODY = "html";
+        public static final String ATTACHMENTS = "attachments";
+
+        // dump (also LOCATION)
+        public static final String VALUES = "values";
+
         private Content() {
         }
     }

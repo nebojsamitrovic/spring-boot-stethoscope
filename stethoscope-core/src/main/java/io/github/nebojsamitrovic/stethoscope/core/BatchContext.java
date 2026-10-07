@@ -25,6 +25,15 @@ public final class BatchContext {
         return CURRENT.get();
     }
 
+    /** Makes an existing batch current again, e.g. after a nested unit of work ended. */
+    public static void restore(Batch batch) {
+        if (batch == null) {
+            CURRENT.remove();
+        } else {
+            CURRENT.set(batch);
+        }
+    }
+
     public static void end() {
         CURRENT.remove();
     }

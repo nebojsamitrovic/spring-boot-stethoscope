@@ -32,6 +32,8 @@ public class Recorder {
     private final Clock clock;
     private final AtomicLong sequence = new AtomicLong();
     private volatile boolean paused;
+    /** Throwables already recorded. Weak keys; Throwable uses identity equality. */
+    private final Map<Throwable, Boolean> recentExceptions = new java.util.WeakHashMap<>();
 
     public Recorder(EntryStore store, RecorderSettings settings) {
         this(store, settings, Clock.systemUTC());
@@ -66,13 +68,21 @@ public class Recorder {
 
     /** Low-level: store an entry in the current batch. Returns {@code null} when paused. */
     public Entry record(EntryType type, Map<String, Object> content, Set<String> tags) {
+        Batch batch = BatchContext.current();
+        return record(type, content, tags, batch == null ? null : batch.id());
+    }
+
+    /**
+     * Low-level: store an entry in an explicit batch, for work that finishes on another thread than
+     * the one that started it (e.g. reactive HTTP calls). Returns {@code null} when paused.
+     */
+    public Entry record(EntryType type, Map<String, Object> content, Set<String> tags, String batchId) {
         if (paused) {
             return null;
         }
-        Batch batch = BatchContext.current();
         Entry entry = new Entry(
                 sequence.incrementAndGet(),
-                batch == null ? null : batch.id(),
+                batchId,
                 type,
                 Instant.now(clock),
                 content,
@@ -140,8 +150,13 @@ public class Recorder {
             return;
         }
         try {
+            // Dedupe per recorder, not per batch: the batch is a thread-local shared by every
+            // application context in the JVM, each with its own recorder.
             Batch batch = BatchContext.current();
-            if (batch != null && !batch.markExceptionRecorded(throwable)) {
+            if (batch != null) {
+                batch.markExceptionRecorded(throwable);
+            }
+            if (!markRecorded(throwable)) {
                 return;
             }
             Map<String, Object> content = new LinkedHashMap<>();
@@ -156,6 +171,46 @@ public class Recorder {
             record(EntryType.EXCEPTION, content, Set.of(handled ? "handled" : "unhandled"));
         } catch (RuntimeException ignored) {
             // never break the application because of the debugger
+        }
+    }
+
+    /**
+     * Records values passed to {@link Stethoscope#dump}.
+     *
+     * @param values   rendered values
+     * @param location caller, e.g. {@code com.acme.OrderService.place(OrderService.java:42)}
+     */
+    public void recordDump(List<String> values, String location) {
+        if (paused) {
+            return;
+        }
+        try {
+            Map<String, Object> content = new LinkedHashMap<>();
+            content.put(Entry.Content.VALUES, List.copyOf(values));
+            if (location != null) {
+                content.put(Entry.Content.LOCATION, location);
+            }
+            record(EntryType.DUMP, content, Set.of());
+        } catch (RuntimeException ignored) {
+            // never break the application because of the debugger
+        }
+    }
+
+    /**
+     * The same exception is often reported more than once: logged by the code that caught it, then
+     * rethrown and seen by the request filter, or wrapped in a {@code ServletException}. Only the
+     * first report of anything in a cause chain is kept.
+     */
+    private boolean markRecorded(Throwable throwable) {
+        synchronized (recentExceptions) {
+            Set<Throwable> seen = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
+            for (Throwable t = throwable; t != null && seen.add(t); t = t.getCause()) {
+                if (recentExceptions.containsKey(t)) {
+                    return false;
+                }
+            }
+            recentExceptions.put(throwable, Boolean.TRUE);
+            return true;
         }
     }
 
