@@ -29,6 +29,13 @@ public class StethoscopeProperties {
     private int maxEntries = 1000;
 
     /**
+     * Keep individual entries for the dashboard. Turn off in production to keep only the overview's
+     * metrics: entries are still created to feed them, but none are kept, and request/response
+     * bodies, outgoing HTTP bodies and query parameters are not captured at all.
+     */
+    private boolean storeEntries = true;
+
+    /**
      * Client IPs allowed to open the dashboard. Empty list means "everyone", which you only want
      * behind your own authentication.
      */
@@ -39,6 +46,8 @@ public class StethoscopeProperties {
 
     /** Query parameters and JSON/form fields whose values are masked. */
     private List<String> redactParameters = new ArrayList<>(Redactor.DEFAULT_PARAMETERS);
+
+    private final BasicAuth basicAuth = new BasicAuth();
 
     private final Requests requests = new Requests();
 
@@ -67,6 +76,8 @@ public class StethoscopeProperties {
     private final Messages messages = new Messages();
 
     private final Redis redis = new Redis();
+
+    private final Metrics metrics = new Metrics();
 
     public boolean isEnabled() {
         return enabled;
@@ -102,6 +113,18 @@ public class StethoscopeProperties {
 
     public void setMaxEntries(int maxEntries) {
         this.maxEntries = maxEntries;
+    }
+
+    public boolean isStoreEntries() {
+        return storeEntries;
+    }
+
+    public void setStoreEntries(boolean storeEntries) {
+        this.storeEntries = storeEntries;
+    }
+
+    public BasicAuth getBasicAuth() {
+        return basicAuth;
     }
 
     public List<String> getAllowedIps() {
@@ -182,6 +205,42 @@ public class StethoscopeProperties {
 
     public Redis getRedis() {
         return redis;
+    }
+
+    public Metrics getMetrics() {
+        return metrics;
+    }
+
+    /**
+     * HTTP Basic credentials for the dashboard, checked in addition to {@code allowed-ips}. Behind a
+     * reverse proxy every client has the proxy's address, so set {@code allowed-ips: []} and rely
+     * on these instead (over HTTPS only).
+     */
+    public static class BasicAuth {
+
+        private String username;
+
+        private String password;
+
+        public String getUsername() {
+            return username;
+        }
+
+        public void setUsername(String username) {
+            this.username = username;
+        }
+
+        public String getPassword() {
+            return password;
+        }
+
+        public void setPassword(String password) {
+            this.password = password;
+        }
+
+        public boolean isConfigured() {
+            return username != null && !username.isBlank() && password != null && !password.isEmpty();
+        }
     }
 
     public static class Requests {
@@ -562,6 +621,90 @@ public class StethoscopeProperties {
 
         public void setEnabled(boolean enabled) {
             this.enabled = enabled;
+        }
+    }
+
+    /**
+     * Aggregates behind the overview page, kept in the application's database ({@code stethoscope_metrics})
+     * so they survive restarts. Needs a single {@code DataSource}.
+     */
+    public static class Metrics {
+
+        /** Collect metrics and show the overview page. */
+        private boolean enabled = true;
+
+        /** How often collected counters are written to the database. */
+        private Duration flushInterval = Duration.ofSeconds(10);
+
+        /** How long hourly buckets are kept. Minute buckets are always kept for 25 hours. */
+        private Duration retention = Duration.ofDays(7);
+
+        /** Create the table at startup if it does not exist. Turn off when a Flyway/Liquibase migration creates it. */
+        private boolean initializeSchema = true;
+
+        /** Distinct keys held in memory between writes; beyond this new keys are dropped until the next write. */
+        private int maxPendingKeys = 10_000;
+
+        /** Record this JVM's CPU and heap once a minute. */
+        private boolean system = true;
+
+        /** Name this instance is shown under in the servers card; defaults to the host name. */
+        private String instanceName;
+
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(boolean enabled) {
+            this.enabled = enabled;
+        }
+
+        public Duration getFlushInterval() {
+            return flushInterval;
+        }
+
+        public void setFlushInterval(Duration flushInterval) {
+            this.flushInterval = flushInterval;
+        }
+
+        public Duration getRetention() {
+            return retention;
+        }
+
+        public void setRetention(Duration retention) {
+            this.retention = retention;
+        }
+
+        public boolean isInitializeSchema() {
+            return initializeSchema;
+        }
+
+        public void setInitializeSchema(boolean initializeSchema) {
+            this.initializeSchema = initializeSchema;
+        }
+
+        public int getMaxPendingKeys() {
+            return maxPendingKeys;
+        }
+
+        public void setMaxPendingKeys(int maxPendingKeys) {
+            this.maxPendingKeys = maxPendingKeys;
+        }
+
+        public boolean isSystem() {
+            return system;
+        }
+
+        public void setSystem(boolean system) {
+            this.system = system;
+        }
+
+        public String getInstanceName() {
+            return instanceName;
+        }
+
+        public void setInstanceName(String instanceName) {
+            this.instanceName = instanceName;
         }
     }
 }

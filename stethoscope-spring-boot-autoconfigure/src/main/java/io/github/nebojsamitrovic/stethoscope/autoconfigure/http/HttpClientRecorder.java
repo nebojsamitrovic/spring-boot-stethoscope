@@ -19,11 +19,19 @@ public class HttpClientRecorder {
     private final Recorder recorder;
     private final Redactor redactor;
     private final StethoscopeProperties.HttpClient settings;
+    private final boolean bodies;
 
     public HttpClientRecorder(Recorder recorder, Redactor redactor, StethoscopeProperties.HttpClient settings) {
+        this(recorder, redactor, settings, true);
+    }
+
+    /** @param bodies {@code false} never captures bodies, whatever {@code settings} say (no entries are kept) */
+    public HttpClientRecorder(
+            Recorder recorder, Redactor redactor, StethoscopeProperties.HttpClient settings, boolean bodies) {
         this.recorder = recorder;
         this.redactor = redactor;
         this.settings = settings;
+        this.bodies = bodies;
     }
 
     public boolean isRecording() {
@@ -31,7 +39,7 @@ public class HttpClientRecorder {
     }
 
     public boolean recordBodies() {
-        return settings.isRecordBodies();
+        return bodies && settings.isRecordBodies();
     }
 
     public int maxBodySize() {
@@ -97,7 +105,7 @@ public class HttpClientRecorder {
 
     /** Request body as text, or {@code null} when it is empty, binary or bodies are off. */
     public String requestBody(byte[] body, HttpHeaders headers) {
-        if (!settings.isRecordBodies() || body == null || body.length == 0 || headers == null
+        if (!recordBodies() || body == null || body.length == 0 || headers == null
                 || !Bodies.isText(String.valueOf(headers.getContentType()))) {
             return null;
         }

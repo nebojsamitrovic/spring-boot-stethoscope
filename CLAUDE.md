@@ -19,7 +19,14 @@ Java 17 baseline (`options.release = 17`), Gradle (Groovy DSL), Spring Boot 3.5.
     `messaging/` (observation handler; Kafka/Rabbit adapters are only loaded when on the classpath)
   - `support/` — `Bodies` (text detection/truncation), `TypePreservingProxy` (CGLIB wrap that keeps the
     bean's concrete type; used for `CacheManager` and `JavaMailSender`)
-  - `ui/` — `StethoscopeUiController` + `Views` (HTML via strings, everything escaped with `Html.esc`)
+  - `metrics/` — aggregates behind the overview (first dashboard page), kept in the app's database so
+    they survive restarts. `MetricsAggregator` is an `EntryListener` folding entries into minute/hour
+    counters in memory; `JdbcMetricsStore` writes them to `stethoscope_metrics` (schema in
+    `META-INF/stethoscope/metrics-schema.sql`, update-then-insert instead of vendor upserts, all inside
+    `Recorder.unrecorded`); `MetricsScheduler` (SmartLifecycle, private thread) flushes, samples
+    CPU/heap and purges. Needs a single `DataSource`; without one the dashboard opens on Requests.
+  - `ui/` — `StethoscopeUiController` + `Views` (HTML via strings, everything escaped with `Html.esc`);
+    the overview is `OverviewReader` (reads) + `OverviewViews`; HTTP plumbing in `DashboardResponses`
   - assets in `src/main/resources/META-INF/stethoscope/assets/` (htmx 2.0.11, CSS)
   - registration: `META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports`
 - `stethoscope-spring-boot-starter` — autoconfigure + datasource-proxy
@@ -28,6 +35,8 @@ Java 17 baseline (`options.release = 17`), Gradle (Groovy DSL), Spring Boot 3.5.
 ## Status
 
 - `./gradlew build` is green (Gradle 9.8.0, Spring Boot 3.5.16, datasource-proxy 1.11.0, JUnit 6.1.3 in core).
+- `stethoscope.store-entries=false` (`DiscardingEntryStore`): production mode, overview metrics only,
+  no bodies or query parameters captured. `stethoscope.basic-auth.*` adds HTTP Basic to the gate.
 - Watchers: requests, queries, models, exceptions, logs, jobs, schedule, messages, HTTP client, events,
   cache, Redis, mail, security, dumps.
 - Batches: requests, scheduled runs, jobs and received messages each open one. A job's entry lives in
@@ -45,7 +54,7 @@ Java 17 baseline (`options.release = 17`), Gradle (Groovy DSL), Spring Boot 3.5.
 1. Try it in a real app (`mavenLocal()`, starter dependency, `stethoscope.enabled: true`).
 2. Ideas: batch view (everything of one batch on one page), notifications, view rendering (Thymeleaf),
    Kafka batch listeners, `@Async` with custom `AsyncConfigurer` executors that are not beans.
-3. Later: Jackson 3 for dumps on Boot 4 (now `toString()` without Jackson 2), WebFlux server, SSE live updates, JDBC-backed store, pruning,
+3. Later: Jackson 3 for dumps on Boot 4 (now `toString()` without Jackson 2), WebFlux server, SSE live updates, JDBC-backed entry store, pruning,
    Maven Central publishing (`com.vanniktech.maven.publish`).
 
 ## Conventions
@@ -54,3 +63,5 @@ Java 17 baseline (`options.release = 17`), Gradle (Groovy DSL), Spring Boot 3.5.
 - Every value rendered into HTML goes through `Html.esc`.
 - No new runtime dependencies for users. Optional integrations are `compileOnly` + `@ConditionalOnClass`.
 - Every auto-configured bean is `@ConditionalOnMissingBean`.
+- Controllers have no private methods: reads go to the store/a service, HTTP plumbing to a helper
+  (`DashboardResponses`).

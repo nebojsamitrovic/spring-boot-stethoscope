@@ -17,6 +17,7 @@ dependencies {
     compileOnly 'jakarta.servlet:jakarta.servlet-api'
     compileOnly 'org.slf4j:slf4j-api'
     compileOnly "net.ttddyy:datasource-proxy:${datasourceProxyVersion}"
+    compileOnly 'org.springframework:spring-jdbc'
 
     // Optional integrations: each watcher is @ConditionalOnClass on these.
     compileOnly 'org.springframework:spring-webflux'

@@ -96,4 +96,37 @@ class RecorderTest {
 
         assertEquals(1, store.count(EntryType.EXCEPTION));
     }
+
+    @Test
+    void listenersSeeEveryEntryAndABrokenOneDoesNotStopTheOthers() {
+        List<Entry> seen = new java.util.ArrayList<>();
+        Recorder withListeners = new Recorder(store, RecorderSettings.defaults(), java.time.Clock.systemUTC(), List.of(
+                entry -> {
+                    throw new IllegalStateException("broken listener");
+                },
+                seen::add));
+
+        withListeners.recordQuery("select 1", List.of(), 0, true, null);
+        Entry request = withListeners.record(EntryType.REQUEST, Map.of(), Set.of());
+
+        assertEquals(2, seen.size());
+        assertEquals(request, seen.get(1));
+        assertEquals(1, store.count(EntryType.REQUEST));
+    }
+
+    @Test
+    void nothingIsRecordedInsideUnrecorded() {
+        String result = Recorder.unrecorded(() -> {
+            recorder.recordQuery("select * from stethoscope_metrics", List.of(), 0, true, null);
+            recorder.recordException(new IllegalStateException("own failure"), true);
+            assertNull(recorder.record(EntryType.LOG, Map.of(), Set.of()));
+            assertTrue(recorder.isRecording(), "suppression is per thread, not a pause");
+            return "done";
+        });
+
+        assertEquals("done", result);
+        assertEquals(0, store.list(new EntryQuery(null, null, null, 0)).size());
+        recorder.recordQuery("select 1", List.of(), 0, true, null);
+        assertEquals(1, store.count(EntryType.QUERY), "recording resumes after the block");
+    }
 }

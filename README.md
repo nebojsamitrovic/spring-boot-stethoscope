@@ -124,7 +124,11 @@ stethoscope:
   enabled: false                 # master switch
   path: /stethoscope
   max-entries: 1000              # in-memory ring buffer, per entry type
+  store-entries: true            # false: keep no entries, capture no bodies (overview only)
   allowed-ips: [127.0.0.1, "::1", "0:0:0:0:0:0:0:1"]   # empty list = everyone
+  basic-auth:                    # optional, checked in addition to allowed-ips
+    username:
+    password:
   redact-headers: [authorization, cookie, set-cookie, ...]
   redact-parameters: [password, token, secret, ...]
   requests:
@@ -173,18 +177,62 @@ stethoscope:
     enabled: true
 ```
 
+## Overview
+
+The dashboard opens on an overview of what the application did over the last hour, 6 hours,
+24 hours or 7 days. Entries live in memory and are gone after a restart; the overview's metrics
+are kept in the application's own database instead, so a week of traffic survives any number of
+deploys:
+
+- requests per minute by status class, average and max duration
+- slow requests by route pattern (`GET /orders/{id}`, never the raw URI)
+- slow queries by statement shape, exceptions by class and location (with the latest message)
+- jobs and scheduled tasks (slowest first) and their failures, slow outgoing HTTP calls by origin
+- CPU and heap of every instance, once a minute
+
+Counters are collected in memory and written every 10 s in one transaction, to minute buckets
+(kept 25 h) and hour buckets (kept `retention`). Their number depends on distinct routes and
+statements, not on traffic. "Slow" uses the thresholds above (`requests.slow-threshold`, ...).
+It needs a single `DataSource`; without one the dashboard opens on Requests as before.
+
+```yaml
+# production
+stethoscope:
+  enabled: true
+  store-entries: false           # overview only: no bodies, no parameters, no entries in memory
+  allowed-ips: []                # behind a proxy every client has the proxy's address...
+  basic-auth:                    # ...so ask for credentials instead (HTTPS only)
+    username: ops
+    password: ${STETHOSCOPE_PASSWORD}
+  metrics:
+    enabled: true
+    retention: 7d                # hour buckets; minute buckets are kept 25 h
+    flush-interval: 10s
+    initialize-schema: true      # CREATE TABLE IF NOT EXISTS at startup
+    system: true                 # CPU and heap per instance
+    instance-name:               # defaults to the host name
+```
+
+The table is `stethoscope_metrics`; with Flyway or Liquibase copy
+`META-INF/stethoscope/metrics-schema.sql` from the jar into a migration and set
+`initialize-schema: false`. Tested on PostgreSQL and H2. The metrics' own SQL is never recorded.
+
 ## Access control
 
-By default only localhost may open the dashboard. Plug in your own rule:
+By default only localhost may open the dashboard. `stethoscope.basic-auth.*` adds HTTP Basic
+credentials on top of `allowed-ips`, which works whatever the application's own authentication is.
+Or plug in your own rule. The gate runs before Spring Security's filter chain, so there is no
+authenticated user yet (`request.isUserInRole(..)` is always false); check what the request
+itself carries:
 
 ```java
 @Bean
 StethoscopeGate stethoscopeGate() {
-    return request -> request.isUserInRole("ADMIN");
+    return request -> "10.0.0.5".equals(request.getRemoteAddr());
 }
 ```
 
-With Spring Security, also permit the path (the gate runs before Security's filter chain):
+With Spring Security, also permit the path:
 
 ```java
 http.authorizeHttpRequests(a -> a.requestMatchers("/stethoscope/**").permitAll() /* gate decides */);
@@ -195,7 +243,7 @@ http.authorizeHttpRequests(a -> a.requestMatchers("/stethoscope/**").permitAll()
 | Module                                   | Contents                                                     |
 |------------------------------------------|--------------------------------------------------------------|
 | `stethoscope-core`                       | Entry model, ring-buffer store, recorder (no Spring)         |
-| `stethoscope-spring-boot-autoconfigure`  | Watchers, properties, htmx UI                                |
+| `stethoscope-spring-boot-autoconfigure`  | Watchers, overview metrics, properties, htmx UI              |
 | `stethoscope-spring-boot-starter`        | The one dependency users add                                 |
 | `stethoscope-bom`                        | Version alignment                                            |
 

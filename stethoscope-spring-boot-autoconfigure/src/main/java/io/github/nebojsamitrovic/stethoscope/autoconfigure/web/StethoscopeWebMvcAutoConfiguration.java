@@ -1,12 +1,15 @@
 package io.github.nebojsamitrovic.stethoscope.autoconfigure.web;
 
 import io.github.nebojsamitrovic.stethoscope.autoconfigure.AllowedIpsGate;
+import io.github.nebojsamitrovic.stethoscope.autoconfigure.BasicAuthGate;
 import io.github.nebojsamitrovic.stethoscope.autoconfigure.StethoscopeAutoConfiguration;
 import io.github.nebojsamitrovic.stethoscope.autoconfigure.StethoscopeGate;
 import io.github.nebojsamitrovic.stethoscope.autoconfigure.StethoscopeProperties;
+import io.github.nebojsamitrovic.stethoscope.autoconfigure.metrics.MetricsStore;
 import io.github.nebojsamitrovic.stethoscope.autoconfigure.ui.StethoscopeUiController;
 import io.github.nebojsamitrovic.stethoscope.core.Recorder;
 import io.github.nebojsamitrovic.stethoscope.core.Redactor;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
@@ -32,7 +35,11 @@ public class StethoscopeWebMvcAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
     public StethoscopeGate stethoscopeGate(StethoscopeProperties properties) {
-        return new AllowedIpsGate(properties.getAllowedIps());
+        AllowedIpsGate ips = new AllowedIpsGate(properties.getAllowedIps());
+        StethoscopeProperties.BasicAuth basic = properties.getBasicAuth();
+        return basic.isConfigured()
+                ? StethoscopeGate.allOf(ips, new BasicAuthGate(basic.getUsername(), basic.getPassword()))
+                : ips;
     }
 
     @Bean
@@ -50,7 +57,8 @@ public class StethoscopeWebMvcAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public StethoscopeUiController stethoscopeUiController(Recorder recorder, StethoscopeProperties properties) {
-        return new StethoscopeUiController(recorder, properties);
+    public StethoscopeUiController stethoscopeUiController(
+            Recorder recorder, StethoscopeProperties properties, ObjectProvider<MetricsStore> metrics) {
+        return new StethoscopeUiController(recorder, properties, metrics.getIfAvailable());
     }
 }

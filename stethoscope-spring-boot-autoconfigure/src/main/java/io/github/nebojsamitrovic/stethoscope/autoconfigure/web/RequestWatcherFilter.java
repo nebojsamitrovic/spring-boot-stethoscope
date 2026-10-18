@@ -86,7 +86,7 @@ public class RequestWatcherFilter extends OncePerRequestFilter implements Ordere
 
         if (isDashboard(path)) {
             if (!gate.allows(request)) {
-                response.sendError(HttpServletResponse.SC_FORBIDDEN, "Stethoscope: access denied");
+                gate.deny(request, response);
                 return;
             }
             chain.doFilter(request, response);
@@ -99,10 +99,11 @@ public class RequestWatcherFilter extends OncePerRequestFilter implements Ordere
         }
 
         StethoscopeProperties.Requests settings = properties.getRequests();
-        HttpServletRequest requestToUse = settings.isRecordRequestBody()
+        boolean bodies = properties.isStoreEntries();
+        HttpServletRequest requestToUse = bodies && settings.isRecordRequestBody()
                 ? new ContentCachingRequestWrapper(request, settings.getMaxBodySize())
                 : request;
-        ContentCachingResponseWrapper responseWrapper = settings.isRecordResponseBody() && !isStreaming(request)
+        ContentCachingResponseWrapper responseWrapper = bodies && settings.isRecordResponseBody() && !isStreaming(request)
                 ? new ContentCachingResponseWrapper(response)
                 : null;
         HttpServletResponse responseToUse = responseWrapper != null ? responseWrapper : response;
@@ -154,6 +155,9 @@ public class RequestWatcherFilter extends OncePerRequestFilter implements Ordere
             String handler = handlerName(request);
             if (handler != null) {
                 content.put(Entry.Content.HANDLER, handler);
+            }
+            if (request.getAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE) instanceof String route) {
+                content.put(Entry.Content.ROUTE, route);
             }
             content.put(Entry.Content.REQUEST_HEADERS, redactor.headers(requestHeaders(request)));
             content.put(Entry.Content.RESPONSE_HEADERS, redactor.headers(responseHeaders(response)));

@@ -27,9 +27,12 @@ public class Recorder {
             "io.undertow.", "kotlin.", "io.github.nebojsamitrovic.stethoscope.autoconfigure."
     };
 
+    private static final ThreadLocal<Boolean> SUPPRESSED = new ThreadLocal<>();
+
     private final EntryStore store;
     private final RecorderSettings settings;
     private final Clock clock;
+    private final List<EntryListener> listeners;
     private final AtomicLong sequence = new AtomicLong();
     private volatile boolean paused;
     /** Throwables already recorded. Weak keys; Throwable uses identity equality. */
@@ -40,9 +43,35 @@ public class Recorder {
     }
 
     public Recorder(EntryStore store, RecorderSettings settings, Clock clock) {
+        this(store, settings, clock, List.of());
+    }
+
+    public Recorder(EntryStore store, RecorderSettings settings, Clock clock, List<EntryListener> listeners) {
         this.store = Objects.requireNonNull(store, "store");
         this.settings = Objects.requireNonNull(settings, "settings");
         this.clock = Objects.requireNonNull(clock, "clock");
+        this.listeners = List.copyOf(Objects.requireNonNull(listeners, "listeners"));
+    }
+
+    /**
+     * Runs {@code work} with recording switched off on the current thread, for Stethoscope's own
+     * work: without it, the SQL the metrics run against the application's (wrapped) data source
+     * would be recorded and fed back into what it reports.
+     */
+    public static <T> T unrecorded(java.util.function.Supplier<T> work) {
+        if (SUPPRESSED.get() != null) {
+            return work.get();
+        }
+        SUPPRESSED.set(Boolean.TRUE);
+        try {
+            return work.get();
+        } finally {
+            SUPPRESSED.remove();
+        }
+    }
+
+    private boolean active() {
+        return !paused && SUPPRESSED.get() == null;
     }
 
     public EntryStore store() {
@@ -77,7 +106,7 @@ public class Recorder {
      * the one that started it (e.g. reactive HTTP calls). Returns {@code null} when paused.
      */
     public Entry record(EntryType type, Map<String, Object> content, Set<String> tags, String batchId) {
-        if (paused) {
+        if (!active()) {
             return null;
         }
         Entry entry = new Entry(
@@ -88,6 +117,13 @@ public class Recorder {
                 content,
                 tags);
         store.store(entry);
+        for (EntryListener listener : listeners) {
+            try {
+                listener.onEntry(entry);
+            } catch (RuntimeException ignored) {
+                // a broken listener must not cost the entry its other listeners, or the application anything
+            }
+        }
         return entry;
     }
 
@@ -101,7 +137,7 @@ public class Recorder {
      * @param dataSource     data source name, may be {@code null}
      */
     public void recordQuery(String sql, List<?> parameters, long durationNanos, boolean success, String dataSource) {
-        if (paused) {
+        if (!active()) {
             return;
         }
         try {
@@ -146,7 +182,7 @@ public class Recorder {
      * @param handled {@code true} if the application turned it into a response itself
      */
     public void recordException(Throwable throwable, boolean handled) {
-        if (paused || throwable == null) {
+        if (!active() || throwable == null) {
             return;
         }
         try {
@@ -181,7 +217,7 @@ public class Recorder {
      * @param location caller, e.g. {@code com.acme.OrderService.place(OrderService.java:42)}
      */
     public void recordDump(List<String> values, String location) {
-        if (paused) {
+        if (!active()) {
             return;
         }
         try {

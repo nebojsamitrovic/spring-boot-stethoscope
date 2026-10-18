@@ -35,7 +35,16 @@ final class Views {
     // ---------------------------------------------------------------- layout
 
     static String page(ViewContext ctx, EntryType active, String title, String body) {
+        return page(ctx, active, false, title, body);
+    }
+
+    static String page(ViewContext ctx, EntryType active, boolean overviewActive, String title, String body) {
         StringBuilder nav = new StringBuilder();
+        if (ctx.overview()) {
+            nav.append("<a class=\"nav-item").append(overviewActive ? " active" : "").append("\" href=\"")
+                    .append(esc(ctx.link("/overview"))).append("\"").append(overviewActive ? " aria-current=\"page\"" : "")
+                    .append("><span>Overview</span></a><hr class=\"nav-divider\">");
+        }
         for (EntryType type : EntryType.values()) {
             nav.append("<a class=\"nav-item").append(type == active ? " active" : "").append("\" href=\"")
                     .append(esc(ctx.link("/" + ViewContext.section(type)))).append("\"")
@@ -82,7 +91,7 @@ final class Views {
                 esc(ctx.link("/assets/stethoscope.css")),
                 esc(ctx.link("/assets/htmx.min.js")),
                 hxHeaders,
-                esc(ctx.link("/requests")), LOGO,
+                esc(ctx.link("")), LOGO,
                 recording,
                 esc(ctx.link("/clear")),
                 nav,

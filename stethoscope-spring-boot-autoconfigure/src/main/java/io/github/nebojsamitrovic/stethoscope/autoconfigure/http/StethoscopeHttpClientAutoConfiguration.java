@@ -29,7 +29,7 @@ public class StethoscopeHttpClientAutoConfiguration {
     @ConditionalOnMissingBean
     public HttpClientRecorder stethoscopeHttpClientRecorder(
             Recorder recorder, Redactor redactor, StethoscopeProperties properties) {
-        return new HttpClientRecorder(recorder, redactor, properties.getHttpClient());
+        return new HttpClientRecorder(recorder, redactor, properties.getHttpClient(), properties.isStoreEntries());
     }
 
     @Bean

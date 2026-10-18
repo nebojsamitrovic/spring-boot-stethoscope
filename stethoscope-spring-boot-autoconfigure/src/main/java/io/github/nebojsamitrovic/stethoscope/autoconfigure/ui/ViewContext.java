@@ -15,6 +15,7 @@ import java.util.Map;
  * @param recording  whether the recorder is currently recording
  * @param now        reference time for "12s ago"
  * @param zone       time zone used to show absolute times
+ * @param overview   whether the overview page exists (metrics are collected)
  */
 record ViewContext(
         String base,
@@ -23,7 +24,8 @@ record ViewContext(
         Map<EntryType, Long> counts,
         boolean recording,
         Instant now,
-        ZoneId zone) {
+        ZoneId zone,
+        boolean overview) {
 
     String link(String path) {
         return base + path;

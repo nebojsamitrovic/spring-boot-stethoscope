@@ -73,6 +73,8 @@ public record Entry(
         public static final String REQUEST_BODY = "requestBody";
         public static final String RESPONSE_BODY = "responseBody";
         public static final String HANDLER = "handler";
+        /** Matched route pattern, e.g. {@code /orders/{id}}; absent when no handler matched. */
+        public static final String ROUTE = "route";
         public static final String QUERY_COUNT = "queryCount";
         public static final String QUERY_TIME_MS = "queryTimeMs";
         public static final String DUPLICATE_QUERIES = "duplicateQueries";
