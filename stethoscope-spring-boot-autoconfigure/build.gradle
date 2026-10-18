@@ -31,6 +31,12 @@ dependencies {
     compileOnly 'org.springframework.kafka:spring-kafka'
     compileOnly 'org.springframework.amqp:spring-rabbit'
 
+    // Spring Boot 4 moved the HTTP client customizers into modules of their own. Only those
+    // interfaces are compiled against (no transitives, so Boot 3.5 stays the compile target);
+    // the configurations that use them are guarded by class name.
+    compileOnly("org.springframework.boot:spring-boot-restclient:${springBoot4Version}") { transitive = false }
+    compileOnly("org.springframework.boot:spring-boot-webclient:${springBoot4Version}") { transitive = false }
+
     // Generiše spring-configuration-metadata.json → autocomplete u application.yml
     annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
 

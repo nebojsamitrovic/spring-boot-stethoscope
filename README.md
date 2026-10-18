@@ -12,7 +12,7 @@ and your own dumps — in your browser at `/stethoscope`.
 
 ## Install
 
-Requirements: Java 17+, Spring Boot 3.x with Spring MVC (servlet stack).
+Requirements: Java 17+, Spring Boot 3.x or 4.x with Spring MVC (servlet stack).
 
 ### 1. Publish to your local Maven repository
 

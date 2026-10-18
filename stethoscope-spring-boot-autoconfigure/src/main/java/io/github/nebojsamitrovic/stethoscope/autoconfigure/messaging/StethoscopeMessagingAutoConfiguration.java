@@ -25,7 +25,10 @@ import org.springframework.kafka.core.KafkaTemplate;
  */
 @AutoConfiguration(
         after = StethoscopeAutoConfiguration.class,
-        afterName = "org.springframework.boot.actuate.autoconfigure.observation.ObservationAutoConfiguration")
+        afterName = {
+            "org.springframework.boot.actuate.autoconfigure.observation.ObservationAutoConfiguration", // Boot 3
+            "org.springframework.boot.micrometer.observation.autoconfigure.ObservationAutoConfiguration" // Boot 4
+        })
 @ConditionalOnClass(name = "io.micrometer.observation.ObservationRegistry")
 @ConditionalOnProperty(prefix = "stethoscope", name = "enabled", havingValue = "true")
 @ConditionalOnProperty(prefix = "stethoscope.messages", name = "enabled", havingValue = "true", matchIfMissing = true)

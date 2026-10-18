@@ -45,7 +45,7 @@ Java 17 baseline (`options.release = 17`), Gradle (Groovy DSL), Spring Boot 3.5.
 1. Try it in a real app (`mavenLocal()`, starter dependency, `stethoscope.enabled: true`).
 2. Ideas: batch view (everything of one batch on one page), notifications, view rendering (Thymeleaf),
    Kafka batch listeners, `@Async` with custom `AsyncConfigurer` executors that are not beans.
-3. Later: Spring Boot 4 compatibility check, WebFlux server, SSE live updates, JDBC-backed store, pruning,
+3. Later: Jackson 3 for dumps on Boot 4 (now `toString()` without Jackson 2), WebFlux server, SSE live updates, JDBC-backed store, pruning,
    Maven Central publishing (`com.vanniktech.maven.publish`).
 
 ## Conventions

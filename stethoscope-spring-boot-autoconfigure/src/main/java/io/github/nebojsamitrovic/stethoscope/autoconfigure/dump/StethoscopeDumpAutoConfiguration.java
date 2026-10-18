@@ -15,7 +15,6 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.boot.autoconfigure.jackson.JacksonAutoConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -23,7 +22,12 @@ import org.springframework.context.annotation.Configuration;
  * Connects {@link Stethoscope#dump} to the recorder. Values are rendered as pretty JSON when Jackson
  * is available, otherwise with {@code toString()}.
  */
-@AutoConfiguration(after = {StethoscopeAutoConfiguration.class, JacksonAutoConfiguration.class})
+@AutoConfiguration(
+        after = StethoscopeAutoConfiguration.class,
+        afterName = {
+            "org.springframework.boot.autoconfigure.jackson.JacksonAutoConfiguration", // Boot 3
+            "org.springframework.boot.jackson.autoconfigure.JacksonAutoConfiguration" // Boot 4
+        })
 @ConditionalOnProperty(prefix = "stethoscope", name = "enabled", havingValue = "true")
 @ConditionalOnBean(Recorder.class)
 public class StethoscopeDumpAutoConfiguration {

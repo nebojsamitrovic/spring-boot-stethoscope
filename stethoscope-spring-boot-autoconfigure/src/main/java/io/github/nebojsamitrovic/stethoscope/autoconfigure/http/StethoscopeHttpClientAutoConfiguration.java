@@ -9,13 +9,9 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.boot.web.client.RestClientCustomizer;
-import org.springframework.boot.web.client.RestTemplateCustomizer;
-import org.springframework.boot.web.reactive.function.client.WebClientCustomizer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.client.RestTemplate;
-import org.springframework.web.reactive.function.client.WebClient;
 
 /**
  * Outgoing HTTP watcher. Hooks into the {@code RestTemplateBuilder}, {@code RestClient.Builder} and
@@ -42,32 +38,74 @@ public class StethoscopeHttpClientAutoConfiguration {
         return new StethoscopeClientHttpRequestInterceptor(recorder);
     }
 
+    static void addInterceptor(RestTemplate restTemplate, StethoscopeClientHttpRequestInterceptor interceptor) {
+        if (!restTemplate.getInterceptors().contains(interceptor)) {
+            restTemplate.getInterceptors().add(interceptor);
+        }
+    }
+
+    // Spring Boot 4 moved the customizer interfaces to new packages. Each pair below is guarded by
+    // class name, so only the one matching the running Boot version is ever loaded.
+
     @Configuration(proxyBeanMethods = false)
-    @ConditionalOnClass(RestTemplate.class)
+    @ConditionalOnClass(name = "org.springframework.boot.web.client.RestTemplateCustomizer")
     static class Blocking {
 
         @Bean
-        RestTemplateCustomizer stethoscopeRestTemplateCustomizer(StethoscopeClientHttpRequestInterceptor interceptor) {
-            return restTemplate -> {
-                if (!restTemplate.getInterceptors().contains(interceptor)) {
-                    restTemplate.getInterceptors().add(interceptor);
-                }
-            };
+        org.springframework.boot.web.client.RestTemplateCustomizer stethoscopeRestTemplateCustomizer(
+                StethoscopeClientHttpRequestInterceptor interceptor) {
+            return restTemplate -> addInterceptor(restTemplate, interceptor);
         }
 
         @Bean
         @ConditionalOnClass(name = "org.springframework.web.client.RestClient")
-        RestClientCustomizer stethoscopeRestClientCustomizer(StethoscopeClientHttpRequestInterceptor interceptor) {
+        org.springframework.boot.web.client.RestClientCustomizer stethoscopeRestClientCustomizer(
+                StethoscopeClientHttpRequestInterceptor interceptor) {
             return builder -> builder.requestInterceptor(interceptor);
         }
     }
 
     @Configuration(proxyBeanMethods = false)
-    @ConditionalOnClass(WebClient.class)
+    @ConditionalOnClass(name = "org.springframework.boot.restclient.RestTemplateCustomizer")
+    static class BlockingBoot4 {
+
+        @Bean
+        org.springframework.boot.restclient.RestTemplateCustomizer stethoscopeRestTemplateCustomizer(
+                StethoscopeClientHttpRequestInterceptor interceptor) {
+            return restTemplate -> addInterceptor(restTemplate, interceptor);
+        }
+
+        @Bean
+        org.springframework.boot.restclient.RestClientCustomizer stethoscopeRestClientCustomizer(
+                StethoscopeClientHttpRequestInterceptor interceptor) {
+            return builder -> builder.requestInterceptor(interceptor);
+        }
+    }
+
+    @Configuration(proxyBeanMethods = false)
+    @ConditionalOnClass(name = {
+        "org.springframework.web.reactive.function.client.WebClient",
+        "org.springframework.boot.web.reactive.function.client.WebClientCustomizer"
+    })
     static class Reactive {
 
         @Bean
-        WebClientCustomizer stethoscopeWebClientCustomizer(HttpClientRecorder recorder) {
+        org.springframework.boot.web.reactive.function.client.WebClientCustomizer stethoscopeWebClientCustomizer(
+                HttpClientRecorder recorder) {
+            StethoscopeExchangeFilterFunction filter = new StethoscopeExchangeFilterFunction(recorder);
+            return builder -> builder.filter(filter);
+        }
+    }
+
+    @Configuration(proxyBeanMethods = false)
+    @ConditionalOnClass(name = {
+        "org.springframework.web.reactive.function.client.WebClient",
+        "org.springframework.boot.webclient.WebClientCustomizer"
+    })
+    static class ReactiveBoot4 {
+
+        @Bean
+        org.springframework.boot.webclient.WebClientCustomizer stethoscopeWebClientCustomizer(HttpClientRecorder recorder) {
             StethoscopeExchangeFilterFunction filter = new StethoscopeExchangeFilterFunction(recorder);
             return builder -> builder.filter(filter);
         }
