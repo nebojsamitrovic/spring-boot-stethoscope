@@ -12,10 +12,3 @@ dependencies {
     }
 }
 
-publishing {
-    publications {
-        mavenBom(MavenPublication) {
-            from components.javaPlatform
-        }
-    }
-}

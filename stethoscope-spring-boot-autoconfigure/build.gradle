@@ -5,7 +5,6 @@ plugins {
 description = 'Stethoscope auto-configuration for Spring Boot'
 
 dependencies {
-    // Spring verzije dolaze iz BOM-a, ali ih ne nameće korisniku (compileOnly / optional).
     compileOnly platform("org.springframework.boot:spring-boot-dependencies:${springBootVersion}")
     annotationProcessor platform("org.springframework.boot:spring-boot-dependencies:${springBootVersion}")
     testImplementation platform("org.springframework.boot:spring-boot-dependencies:${springBootVersion}")
@@ -38,7 +37,6 @@ dependencies {
     compileOnly("org.springframework.boot:spring-boot-restclient:${springBoot4Version}") { transitive = false }
     compileOnly("org.springframework.boot:spring-boot-webclient:${springBoot4Version}") { transitive = false }
 
-    // Generiše spring-configuration-metadata.json → autocomplete u application.yml
     annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
 
     testImplementation 'org.springframework.boot:spring-boot-starter-web'
