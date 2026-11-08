@@ -23,45 +23,32 @@ and your own dumps — in your browser at `/stethoscope`.
 
 Requirements: Java 17+, Spring Boot 3.x or 4.x with Spring MVC (servlet stack).
 
-### 1. Publish to your local Maven repository
+[![Maven Central](https://img.shields.io/maven-central/v/io.github.nebojsamitrovic/stethoscope-spring-boot-starter)](https://central.sonatype.com/artifact/io.github.nebojsamitrovic/stethoscope-spring-boot-starter)
 
-Stethoscope is not on Maven Central yet. In this repository run:
-
-```bash
-./gradlew publishToMavenLocal
-```
-
-Repeat this after every change to the library.
-
-### 2. Add the dependency to your app
+### 1. Add the dependency to your app
 
 Gradle:
 
 ```groovy
-repositories {
-    mavenLocal()
-    mavenCentral()
-}
-
 dependencies {
-    implementation 'io.github.nebojsamitrovic:stethoscope-spring-boot-starter:0.1.0-SNAPSHOT'
+    implementation 'io.github.nebojsamitrovic:stethoscope-spring-boot-starter:0.1.0'
 }
 ```
 
-Maven (reads `~/.m2` on its own, no extra repository needed):
+Maven:
 
 ```xml
 <dependency>
     <groupId>io.github.nebojsamitrovic</groupId>
     <artifactId>stethoscope-spring-boot-starter</artifactId>
-    <version>0.1.0-SNAPSHOT</version>
+    <version>0.1.0</version>
 </dependency>
 ```
 
 With several Stethoscope modules, the BOM keeps their versions aligned:
-`implementation platform('io.github.nebojsamitrovic:stethoscope-bom:0.1.0-SNAPSHOT')`.
+`implementation platform('io.github.nebojsamitrovic:stethoscope-bom:0.1.0')`.
 
-### 3. Turn it on in your dev profile
+### 2. Turn it on in your dev profile
 
 It is off by default. In `src/main/resources/application-dev.yml`:
 

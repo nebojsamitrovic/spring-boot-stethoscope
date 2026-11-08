@@ -49,13 +49,19 @@ Java 17 baseline (`options.release = 17`), Gradle (Groovy DSL), Spring Boot 3.5.
 - Integration tests share the JVM: cached contexts keep their Logback appenders attached, so never dedupe
   on shared thread-local state (see `Recorder.recordException`).
 
+## Releasing
+
+Published to Maven Central (`io.github.nebojsamitrovic`, first release 0.1.0) with `com.vanniktech.maven.publish`.
+Credentials and the GPG key live in `~/.gradle/gradle.properties`, never in the repo. Steps: drop `-SNAPSHOT` in
+`gradle.properties`, `./gradlew publishToMavenCentral`, Publish on central.sonatype.com → Deployments, tag `vX.Y.Z`,
+bump to the next `-SNAPSHOT`. A released version can never be re-published.
+
 ## Next steps
 
-1. Try it in a real app (`mavenLocal()`, starter dependency, `stethoscope.enabled: true`).
+1. Try it in a real app (starter dependency from Maven Central, `stethoscope.enabled: true`).
 2. Ideas: batch view (everything of one batch on one page), notifications, view rendering (Thymeleaf),
    Kafka batch listeners, `@Async` with custom `AsyncConfigurer` executors that are not beans.
-3. Later: Jackson 3 for dumps on Boot 4 (now `toString()` without Jackson 2), WebFlux server, SSE live updates, JDBC-backed entry store, pruning,
-   Maven Central publishing (`com.vanniktech.maven.publish`).
+3. Later: Jackson 3 for dumps on Boot 4 (now `toString()` without Jackson 2), WebFlux server, SSE live updates, JDBC-backed entry store, pruning.
 
 ## Conventions
 
