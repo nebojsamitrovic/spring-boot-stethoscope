@@ -1,13 +1,22 @@
 # Stethoscope
 
-Debugging dashboard for Spring Boot, inspired by Laravel Telescope.
+Debugging and monitoring dashboard for Spring Boot, inspired by Laravel
+[Telescope](https://laravel.com/docs/telescope) and [Pulse](https://laravel.com/docs/pulse) — both in
+one library.
+
+- **Like Telescope** (development): every request, query, job, log, exception, … recorded in full,
+  grouped per request, in memory.
+- **Like Pulse** (production): an overview of throughput, slow routes, slow queries, exceptions, jobs
+  and server load over the last hour to 7 days, kept as aggregates in your own database
+  (`store-entries: false` turns the Telescope part off). See [Overview](#overview).
+
 See every HTTP request with the SQL it ran (with N+1 detection), the entities it changed, the
 exceptions it threw, its logs, background jobs, outgoing HTTP calls, Redis commands, cache hits,
 events, messages, mail and security decisions — plus scheduled task runs, Kafka/RabbitMQ listeners
 and your own dumps — in your browser at `/stethoscope`.
 
 - **One dependency**, zero UI build: server-rendered HTML + bundled htmx (~15 KB gzip), no CDN.
-- **Off by default.** You turn it on in your dev profile.
+- **Off by default.** You turn it on per profile (full recording in dev, overview only in production).
 - **Secrets masked** before storage (`Authorization`, cookies, `password`, `token`, …).
 
 ## Install
@@ -179,7 +188,7 @@ stethoscope:
 
 ## Overview
 
-The dashboard opens on an overview of what the application did over the last hour, 6 hours,
+This is the Pulse part. The dashboard opens on an overview of what the application did over the last hour, 6 hours,
 24 hours or 7 days. Entries live in memory and are gone after a restart; the overview's metrics
 are kept in the application's own database instead, so a week of traffic survives any number of
 deploys:

@@ -1,6 +1,6 @@
 # Stethoscope — notes for Claude Code
 
-Laravel Telescope-like debugging dashboard for Spring Boot, published as a library (not an app).
+Laravel Telescope + Pulse-like debugging and monitoring dashboard for Spring Boot, published as a library (not an app).
 Java 17 baseline (`options.release = 17`), Gradle (Groovy DSL), Spring Boot 3.5.x as compile target.
 
 ## Layout
