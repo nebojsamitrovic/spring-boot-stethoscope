@@ -125,6 +125,9 @@ stethoscope:
   basic-auth:                    # optional, checked in addition to allowed-ips
     username:
     password:
+  login:                         # optional: only users signed in to the app (Spring Security)
+    required: false
+    roles: []                    # e.g. [ADMIN]; setting roles implies required
   redact-headers: [authorization, cookie, set-cookie, ...]
   redact-parameters: [password, token, secret, ...]
   requests:
@@ -215,24 +218,49 @@ The table is `stethoscope_metrics`; with Flyway or Liquibase copy
 
 ## Access control
 
-By default only localhost may open the dashboard. `stethoscope.basic-auth.*` adds HTTP Basic
-credentials on top of `allowed-ips`, which works whatever the application's own authentication is.
-Or plug in your own rule. The gate runs before Spring Security's filter chain, so there is no
-authenticated user yet (`request.isUserInRole(..)` is always false); check what the request
-itself carries:
+By default only localhost may open the dashboard (`allowed-ips`). On top of that you can turn on,
+in any combination (all of them must pass):
+
+```yaml
+stethoscope:
+  allowed-ips: []                # [] = any address; behind a proxy every client has the proxy's address
+
+  # 1. fixed HTTP Basic credentials, independent of the app's own authentication (HTTPS only)
+  basic-auth:
+    username: ops
+    password: ${STETHOSCOPE_PASSWORD}
+
+  # 2. users signed in to the application through Spring Security (or a servlet container login)
+  login:
+    required: true
+    roles: [ADMIN]               # optional; matches the authority ROLE_ADMIN
+```
+
+The gate runs after Spring Security's filter chain, so `login` sees the user your app signed in
+(session, form login, remember-me, ...). Let the path through in your own configuration and the gate
+decides; or require authentication for it there, and users who are not signed in go to your login page
+instead of getting a 401:
+
+```java
+http.authorizeHttpRequests(a -> a
+        .requestMatchers("/stethoscope/**").permitAll()   // or .authenticated() for a login redirect
+        .anyRequest().authenticated());
+```
+
+For any other rule, declare your own `StethoscopeGate` bean; it replaces the default. The signed-in
+user is known here too (`request.isUserInRole(..)`, `request.getUserPrincipal()`,
+`SecurityContextHolder`):
 
 ```java
 @Bean
 StethoscopeGate stethoscopeGate() {
-    return request -> "10.0.0.5".equals(request.getRemoteAddr());
+    return request -> request.isUserInRole("ADMIN") || "10.0.0.5".equals(request.getRemoteAddr());
 }
 ```
 
-With Spring Security, also permit the path:
-
-```java
-http.authorizeHttpRequests(a -> a.requestMatchers("/stethoscope/**").permitAll() /* gate decides */);
-```
+Override `deny(request, response)` to answer refused requests differently (403 by default), and use
+`StethoscopeGate.allOf(..)` to combine your gate with the built-in `AllowedIpsGate`, `BasicAuthGate`
+or `LoginGate`.
 
 ## Modules
 

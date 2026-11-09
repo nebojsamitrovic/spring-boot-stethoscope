@@ -36,7 +36,12 @@ Java 17 baseline (`options.release = 17`), Gradle (Groovy DSL), Spring Boot 3.5.
 
 - `./gradlew build` is green (Gradle 9.8.0, Spring Boot 3.5.16, datasource-proxy 1.11.0, JUnit 6.1.3 in core).
 - `stethoscope.store-entries=false` (`DiscardingEntryStore`): production mode, overview metrics only,
-  no bodies or query parameters captured. `stethoscope.basic-auth.*` adds HTTP Basic to the gate.
+  no bodies or query parameters captured.
+- Access: `StethoscopeGate` (default = `allOf(AllowedIpsGate, BasicAuthGate?, LoginGate?)` from
+  `allowed-ips`, `basic-auth.*`, `login.*`) is applied by `web/DashboardGateFilter`, ordered after Spring
+  Security's chain so gates see the signed-in user. `LoginGate` uses only the servlet API (no Security classes).
+  Spring Security is on the test classpath; its auto-configs are excluded in test `application.properties`
+  except in `it/LoginGateIntegrationTest`.
 - Watchers: requests, queries, models, exceptions, logs, jobs, schedule, messages, HTTP client, events,
   cache, Redis, mail, security, dumps.
 - Batches: requests, scheduled runs, jobs and received messages each open one. A job's entry lives in

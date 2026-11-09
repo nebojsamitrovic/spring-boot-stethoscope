@@ -34,8 +34,7 @@ import org.springframework.web.util.WebUtils;
  * Records every HTTP request as one {@link EntryType#REQUEST} entry and opens a {@link Batch}
  * so queries and exceptions recorded during the request are linked to it.
  *
- * <p>Also guards the dashboard path with the {@link StethoscopeGate}, so the gate holds even if
- * the UI controller is reached by some other route.
+ * <p>Requests to the dashboard itself are not recorded; {@link DashboardGateFilter} guards them.
  */
 public class RequestWatcherFilter extends OncePerRequestFilter implements Ordered {
 
@@ -45,15 +44,22 @@ public class RequestWatcherFilter extends OncePerRequestFilter implements Ordere
     private final Recorder recorder;
     private final Redactor redactor;
     private final StethoscopeProperties properties;
-    private final StethoscopeGate gate;
     private final AntPathMatcher pathMatcher = new AntPathMatcher();
 
-    public RequestWatcherFilter(
-            Recorder recorder, Redactor redactor, StethoscopeProperties properties, StethoscopeGate gate) {
+    public RequestWatcherFilter(Recorder recorder, Redactor redactor, StethoscopeProperties properties) {
         this.recorder = recorder;
         this.redactor = redactor;
         this.properties = properties;
-        this.gate = gate;
+    }
+
+    /**
+     * @deprecated the gate moved to {@link DashboardGateFilter}, which runs after Spring Security;
+     * {@code gate} is ignored here
+     */
+    @Deprecated(since = "0.1.1", forRemoval = true)
+    public RequestWatcherFilter(
+            Recorder recorder, Redactor redactor, StethoscopeProperties properties, StethoscopeGate gate) {
+        this(recorder, redactor, properties);
     }
 
     @Override
@@ -84,16 +90,7 @@ public class RequestWatcherFilter extends OncePerRequestFilter implements Ordere
 
         String path = pathWithinApplication(request);
 
-        if (isDashboard(path)) {
-            if (!gate.allows(request)) {
-                gate.deny(request, response);
-                return;
-            }
-            chain.doFilter(request, response);
-            return;
-        }
-
-        if (!properties.getRequests().isEnabled() || !recorder.isRecording() || isIgnored(path)) {
+        if (isDashboard(path) || !properties.getRequests().isEnabled() || !recorder.isRecording() || isIgnored(path)) {
             chain.doFilter(request, response);
             return;
         }
@@ -210,7 +207,7 @@ public class RequestWatcherFilter extends OncePerRequestFilter implements Ordere
         return false;
     }
 
-    private static String pathWithinApplication(HttpServletRequest request) {
+    static String pathWithinApplication(HttpServletRequest request) {
         String uri = request.getRequestURI();
         String contextPath = request.getContextPath();
         if (contextPath != null && !contextPath.isEmpty() && uri.startsWith(contextPath)) {

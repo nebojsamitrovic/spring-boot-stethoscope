@@ -6,16 +6,17 @@ import java.io.IOException;
 
 /**
  * Decides who may open the dashboard. The default allows the IPs in {@code stethoscope.allowed-ips}
- * (localhost only) and, when {@code stethoscope.basic-auth.*} is set, also asks for those credentials.
+ * (localhost only) and, when configured, also asks for {@code stethoscope.basic-auth.*} credentials
+ * and/or a user signed in to the application ({@code stethoscope.login.*}).
  *
- * <p>The gate runs before Spring Security's filter chain, so the request carries no authenticated
- * user yet: {@code request.isUserInRole(..)} is always {@code false} here. Declare your own bean to
- * check something the request itself carries, for example:
+ * <p>The gate runs after Spring Security's filter chain, so the signed-in user is known:
+ * {@code request.isUserInRole(..)}, {@code request.getUserPrincipal()} and
+ * {@code SecurityContextHolder} all work. Declare your own bean to replace the default, for example:
  *
  * <pre>
  * &#64;Bean
  * StethoscopeGate stethoscopeGate() {
- *     return request -&gt; "10.0.0.5".equals(request.getRemoteAddr());
+ *     return request -&gt; request.isUserInRole("ADMIN") || "10.0.0.5".equals(request.getRemoteAddr());
  * }
  * </pre>
  */

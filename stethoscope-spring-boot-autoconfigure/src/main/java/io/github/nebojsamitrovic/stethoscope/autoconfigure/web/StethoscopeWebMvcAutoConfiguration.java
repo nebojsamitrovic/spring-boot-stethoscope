@@ -2,6 +2,7 @@ package io.github.nebojsamitrovic.stethoscope.autoconfigure.web;
 
 import io.github.nebojsamitrovic.stethoscope.autoconfigure.AllowedIpsGate;
 import io.github.nebojsamitrovic.stethoscope.autoconfigure.BasicAuthGate;
+import io.github.nebojsamitrovic.stethoscope.autoconfigure.LoginGate;
 import io.github.nebojsamitrovic.stethoscope.autoconfigure.StethoscopeAutoConfiguration;
 import io.github.nebojsamitrovic.stethoscope.autoconfigure.StethoscopeGate;
 import io.github.nebojsamitrovic.stethoscope.autoconfigure.StethoscopeProperties;
@@ -9,6 +10,8 @@ import io.github.nebojsamitrovic.stethoscope.autoconfigure.metrics.MetricsStore;
 import io.github.nebojsamitrovic.stethoscope.autoconfigure.ui.StethoscopeUiController;
 import io.github.nebojsamitrovic.stethoscope.core.Recorder;
 import io.github.nebojsamitrovic.stethoscope.core.Redactor;
+import java.util.ArrayList;
+import java.util.List;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
@@ -35,18 +38,30 @@ public class StethoscopeWebMvcAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
     public StethoscopeGate stethoscopeGate(StethoscopeProperties properties) {
-        AllowedIpsGate ips = new AllowedIpsGate(properties.getAllowedIps());
+        List<StethoscopeGate> gates = new ArrayList<>();
+        gates.add(new AllowedIpsGate(properties.getAllowedIps()));
         StethoscopeProperties.BasicAuth basic = properties.getBasicAuth();
-        return basic.isConfigured()
-                ? StethoscopeGate.allOf(ips, new BasicAuthGate(basic.getUsername(), basic.getPassword()))
-                : ips;
+        if (basic.isConfigured()) {
+            gates.add(new BasicAuthGate(basic.getUsername(), basic.getPassword()));
+        }
+        StethoscopeProperties.Login login = properties.getLogin();
+        if (login.isConfigured()) {
+            gates.add(new LoginGate(login.getRoles()));
+        }
+        return gates.size() == 1 ? gates.get(0) : StethoscopeGate.allOf(gates.toArray(StethoscopeGate[]::new));
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public DashboardGateFilter stethoscopeDashboardGateFilter(StethoscopeProperties properties, StethoscopeGate gate) {
+        return new DashboardGateFilter(properties, gate);
     }
 
     @Bean
     @ConditionalOnMissingBean
     public RequestWatcherFilter stethoscopeRequestWatcherFilter(
-            Recorder recorder, Redactor redactor, StethoscopeProperties properties, StethoscopeGate gate) {
-        return new RequestWatcherFilter(recorder, redactor, properties, gate);
+            Recorder recorder, Redactor redactor, StethoscopeProperties properties) {
+        return new RequestWatcherFilter(recorder, redactor, properties);
     }
 
     @Bean

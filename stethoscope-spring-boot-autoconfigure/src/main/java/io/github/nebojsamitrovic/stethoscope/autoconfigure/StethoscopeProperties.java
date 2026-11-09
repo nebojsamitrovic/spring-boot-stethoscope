@@ -49,6 +49,8 @@ public class StethoscopeProperties {
 
     private final BasicAuth basicAuth = new BasicAuth();
 
+    private final Login login = new Login();
+
     private final Requests requests = new Requests();
 
     private final Queries queries = new Queries();
@@ -125,6 +127,10 @@ public class StethoscopeProperties {
 
     public BasicAuth getBasicAuth() {
         return basicAuth;
+    }
+
+    public Login getLogin() {
+        return login;
     }
 
     public List<String> getAllowedIps() {
@@ -240,6 +246,43 @@ public class StethoscopeProperties {
 
         public boolean isConfigured() {
             return username != null && !username.isBlank() && password != null && !password.isEmpty();
+        }
+    }
+
+    /**
+     * Only users signed in to the application itself (Spring Security, or any servlet container
+     * login) may open the dashboard, checked in addition to {@code allowed-ips} and
+     * {@code basic-auth}. Setting {@code roles} implies {@code required}.
+     */
+    public static class Login {
+
+        /** Require a signed-in user. */
+        private boolean required = false;
+
+        /**
+         * Require one of these roles as well, checked with {@code request.isUserInRole(..)}: with
+         * Spring Security, {@code ADMIN} matches the authority {@code ROLE_ADMIN}.
+         */
+        private List<String> roles = new ArrayList<>();
+
+        public boolean isRequired() {
+            return required;
+        }
+
+        public void setRequired(boolean required) {
+            this.required = required;
+        }
+
+        public List<String> getRoles() {
+            return roles;
+        }
+
+        public void setRoles(List<String> roles) {
+            this.roles = roles;
+        }
+
+        public boolean isConfigured() {
+            return required || (roles != null && roles.stream().anyMatch(r -> r != null && !r.isBlank()));
         }
     }
 

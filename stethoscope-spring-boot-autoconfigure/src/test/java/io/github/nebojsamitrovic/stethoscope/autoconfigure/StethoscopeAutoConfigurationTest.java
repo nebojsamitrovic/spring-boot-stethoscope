@@ -22,6 +22,7 @@ import io.github.nebojsamitrovic.stethoscope.autoconfigure.support.TypePreservin
 import io.github.nebojsamitrovic.stethoscope.autoconfigure.jdbc.StethoscopeJdbcAutoConfiguration;
 import io.github.nebojsamitrovic.stethoscope.autoconfigure.ui.StethoscopeUiController;
 import io.github.nebojsamitrovic.stethoscope.autoconfigure.web.ExceptionCapturingResolver;
+import io.github.nebojsamitrovic.stethoscope.autoconfigure.web.DashboardGateFilter;
 import io.github.nebojsamitrovic.stethoscope.autoconfigure.web.RequestWatcherFilter;
 import io.github.nebojsamitrovic.stethoscope.autoconfigure.web.StethoscopeWebMvcAutoConfiguration;
 import io.github.nebojsamitrovic.stethoscope.core.EntryStore;
@@ -30,7 +31,9 @@ import io.github.nebojsamitrovic.stethoscope.core.Recorder;
 import io.github.nebojsamitrovic.stethoscope.core.Redactor;
 import javax.sql.DataSource;
 import net.ttddyy.dsproxy.support.ProxyDataSource;
+import java.util.Base64;
 import org.junit.jupiter.api.Test;
+import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
@@ -113,6 +116,7 @@ class StethoscopeAutoConfigurationTest {
             assertThat(context).hasSingleBean(Redactor.class);
             assertThat(context).hasSingleBean(StethoscopeGate.class);
             assertThat(context).hasSingleBean(RequestWatcherFilter.class);
+            assertThat(context).hasSingleBean(DashboardGateFilter.class);
             assertThat(context).hasSingleBean(ExceptionCapturingResolver.class);
             assertThat(context).hasSingleBean(StethoscopeUiController.class);
             assertThat(context).hasSingleBean(DataSourceWrappingPostProcessor.class);
@@ -208,6 +212,23 @@ class StethoscopeAutoConfigurationTest {
                     assertThat(context).hasSingleBean(Recorder.class);
                     assertThat(context).doesNotHaveBean(RequestWatcherFilter.class);
                     assertThat(context).doesNotHaveBean(StethoscopeUiController.class);
+                });
+    }
+
+    @Test
+    void defaultGateCombinesIpsBasicAuthAndLogin() {
+        webRunner.withPropertyValues("stethoscope.enabled=true", "stethoscope.allowed-ips=",
+                        "stethoscope.basic-auth.username=ops", "stethoscope.basic-auth.password=pw",
+                        "stethoscope.login.roles=ADMIN")
+                .run(context -> {
+                    StethoscopeGate gate = context.getBean(StethoscopeGate.class);
+                    MockHttpServletRequest request = new MockHttpServletRequest();
+                    request.addHeader("Authorization", "Basic " + Base64.getEncoder().encodeToString("ops:pw".getBytes()));
+                    assertThat(gate.allows(request)).isFalse();
+
+                    request.setUserPrincipal(() -> "jane");
+                    request.addUserRole("ADMIN");
+                    assertThat(gate.allows(request)).isTrue();
                 });
     }
 
